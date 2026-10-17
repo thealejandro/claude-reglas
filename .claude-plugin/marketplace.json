@@ -1,0 +1,7 @@
+{
+  "name": "thealejandro",
+  "owner": { "name": "thealejandro" },
+  "plugins": [
+    { "name": "reglas", "description": "Reglas comunes para todas las sesiones de Claude Code", "source": "./" }
+  ]
+}
