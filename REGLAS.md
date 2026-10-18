@@ -31,3 +31,8 @@
 - La sesión del servidor no despliega hasta que el usuario dé su palabra: le muestra ese resumen, espera su OK, despliega y avisa del resultado a la sesión de desarrollo.
 - Si a una sesión le bloquean un push o una PR por permisos, se lo dice al usuario con el comando exacto; no lo delega en otra sesión.
 - Cada repo con despliegue debe tener CI que corra tests y build en cada PR, y documentado en su runbook cómo se despliega, cómo se verifica y cómo se revierte. Si falta, abre un issue para crearlo.
+
+## Comandos para el usuario
+
+- Cuando el usuario deba ejecutar algo, dale siempre el comando completo, listo para copiar, con la máquina y el usuario donde va (por ejemplo «en `ssh sdevR`, como root»). Nunca digas «ejecuta el comando anterior».
+- Lo que toque permisos, `sudo`, secretos o la configuración de Claude, no lo hagas por rutas indirectas: pásale el comando al usuario y explica en una línea qué hace.
