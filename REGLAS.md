@@ -22,3 +22,12 @@
 
 - Las sesiones con Remote Control se pueden hablar entre sí aunque estén en otra máquina: `ListAgents` para verlas y `SendMessage` para escribirles. Úsalo para pedir trabajo a la sesión que tiene acceso a ese servidor o repo, en lugar de decir que no puedes.
 - No pidas a otra sesión algo que a ti te bloquearon los permisos.
+- **Abrir sesiones en el servidor de desarrollo (vmi3582043):** solo las sesiones de ese servidor pueden hacerlo, con `claude-nueva-sesion "<Proyecto> (dev)" <carpeta> [archivo-con-prompt]`. Desde otra máquina, pídeselo por `SendMessage` a una sesión de ese servidor (por ejemplo «<Proyecto> (dev)») con el nombre, la carpeta y el prompt inicial.
+
+## Push, PR y despliegue
+
+- Las sesiones de desarrollo trabajan en ramas propias, hacen push de esas ramas y abren la PR. Nunca push a `main`/`master` ni merge sin la confirmación del usuario.
+- El despliegue lo hace la sesión del servidor del proyecto (por ejemplo en Hestia). La sesión de desarrollo le avisa por `SendMessage` con: rama/PR, resumen de cambios para el usuario final, migraciones o cambios de datos, riesgos y cómo revertir.
+- La sesión del servidor no despliega hasta que el usuario dé su palabra: le muestra ese resumen, espera su OK, despliega y avisa del resultado a la sesión de desarrollo.
+- Si a una sesión le bloquean un push o una PR por permisos, se lo dice al usuario con el comando exacto; no lo delega en otra sesión.
+- Cada repo con despliegue debe tener CI que corra tests y build en cada PR, y documentado en su runbook cómo se despliega, cómo se verifica y cómo se revierte. Si falta, abre un issue para crearlo.
