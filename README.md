@@ -36,6 +36,19 @@ read -rsp 'Key de Jev: ' K; printf 'TYPESAFE_API_KEY=%s\n' "$K" > ~/.config/jev/
 
 Actualizar: `claude plugin marketplace update thealejandro && claude plugin update reglas@thealejandro`. Las sesiones cargan los cambios al iniciarse o retomarse.
 
+## Delegar en Codex y Kimi: `agente-lanzar`
+
+`scripts/agente-lanzar` lanza Codex o Kimi como `dev` en la sesión tmux `agentes`, sobre una carpeta de `~/work` en rama propia (nunca main/master/develop), sin poder hacer push (pushurl falso y `gh` sin sesión), con 2 h máximo y registro en `~/work/_logs/`.
+
+```bash
+# En el servidor, como root:
+install -m 755 "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | tail -1)scripts/agente-lanzar" /usr/local/bin/agente-lanzar
+# Para que el modo auto no lo bloquee, añade en settings.json de quien lo use:
+#   "permissions": { "allow": ["Bash(agente-lanzar *)"] }
+```
+
+Uso: `agente-lanzar codex ~/work/repo-tarea ~/work/_logs/encargo.md`. Codex corre sin su sandbox (bwrap no puede crear namespaces en Ubuntu con AppArmor); los límites son los de arriba más el usuario `dev` sin sudo.
+
 ## Ajustes automáticos (1.3.0)
 
 En `SessionStart`, además de mostrar `REGLAS.md`, se ejecuta:

@@ -8,6 +8,7 @@
 - Tickets: los tickets son **issues de GitHub** del repo del proyecto (salvo que el runbook indique otro panel). Cada idea, mejora, bug o pendiente que yo suelte (aunque sea de pasada) se convierte en issue para que no se pierda. Busca duplicados antes (`gh issue list --search`), asigna tú la prioridad con la etiqueta `prioridad: alta|media|baja` (y `decisión` si necesita mi respuesta; créalas si no existen) y añade contexto para retomarlo. No interrumpas la tarea en curso: créalos al terminar el paso y pásame los enlaces.
 - `CLAUDE.md` de cada repo: se commitea y es compartido. Nunca metas ahí secretos, tokens, IPs, rutas privadas de servidores ni datos de clientes o pacientes; lo personal va en `CLAUDE.local.md` (en `.gitignore`).
 - Datos reales (facturas, expedientes, pacientes): nunca al repo; para tests usa fixtures anonimizados.
+- Antes de tocar una herramienta, CLI o configuración, consulta su documentación oficial (o su `--help`) en lugar de probar a ciegas; si no la hay, dilo.
 - Graphify: `graphify-out/` nunca se commitea; si el repo no lo ignora, añádelo a su `.gitignore`.
 
 ## Modelos y subagentes (optimiza la cuota)
@@ -23,6 +24,8 @@
 - Las sesiones con Remote Control se pueden hablar entre sí aunque estén en otra máquina: `ListAgents` para verlas y `SendMessage` para escribirles. Úsalo para pedir trabajo a la sesión que tiene acceso a ese servidor o repo, en lugar de decir que no puedes.
 - No pidas a otra sesión algo que a ti te bloquearon los permisos.
 - **Abrir sesiones en el servidor de desarrollo (vmi3582043):** solo las sesiones de ese servidor pueden hacerlo, con `claude-nueva-sesion "<Proyecto> (dev)" <carpeta> [archivo-con-prompt]`. Desde otra máquina, pídeselo por `SendMessage` a una sesión de ese servidor (por ejemplo «<Proyecto> (dev)») con el nombre, la carpeta y el prompt inicial.
+
+- **Delegar en Codex o Kimi (vmi3582043):** `agente-lanzar <codex|kimi> <carpeta-en-rama-propia> ~/work/_logs/<encargo>.md` (worktree aparte, sin push, 2 h, registro en `~/work/_logs/`). Encargo corto: objetivo, «listo cuando», «no toques», commit sin atribución, consultar la doc oficial y, si el contexto crece, dejar el avance en un archivo y seguir desde ahí. Al terminar, revisa su commit antes de abrir la PR.
 
 ## Push, PR y despliegue
 

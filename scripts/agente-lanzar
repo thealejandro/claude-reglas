@@ -1,0 +1,23 @@
+#!/bin/bash
+# Uso: agente-lanzar <codex|kimi> <carpeta-de-trabajo> <archivo-encargo.md>
+# Lanza otro agente como dev en la ventana <agente>-<carpeta> de la sesión tmux "agentes".
+# Límites: solo carpetas de ~/work en una rama propia (nunca main/master/develop), con red
+# pero sin push (git y gh sin credenciales de escritura), 2 h máximo y registro en ~/work/_logs.
+set -u
+AG="${1:?agente: codex|kimi}"; DIR="$(realpath -e "${2:?carpeta}")" || exit 1; ENC="$(realpath -e "${3:?encargo}")" || exit 1
+[[ "$(id -un)" == dev ]] || exec sudo -u dev -i "$0" "$AG" "$DIR" "$ENC"
+[[ "$DIR" == /home/dev/work/* && "$ENC" == /home/dev/work/_logs/*.md ]] || { echo "Solo carpetas de ~/work y encargos de ~/work/_logs" >&2; exit 1; }
+RAMA=$(git -C "$DIR" branch --show-current 2>/dev/null)
+[[ -n "$RAMA" && "$RAMA" != main && "$RAMA" != master && "$RAMA" != develop ]] || { echo "La carpeta debe estar en una rama de trabajo propia (está en '$RAMA')" >&2; exit 1; }
+NOM="$AG-$(basename "$DIR")"; LOG="/home/dev/work/_logs/$NOM.log"
+case "$AG" in
+  codex) cmd="codex exec --sandbox danger-full-access - < '$ENC'" ;;
+  kimi)  cmd="kimi -m kimi-code/k3 -p \\\"\\\$(cat '$ENC')\\\"" ;;
+  *) echo "Agente no soportado: $AG" >&2; exit 1 ;;
+esac
+# Sin push: la URL de push no existe y gh arranca sin sesión.
+SINPUSH="export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.pushurl GIT_CONFIG_VALUE_0=sin-push://bloqueado GH_CONFIG_DIR=\$(mktemp -d) GH_TOKEN= GITHUB_TOKEN="
+run="cd '$DIR' && $SINPUSH && timeout 2h bash -c \"$cmd\" 2>&1 | tee '$LOG'; echo '== terminado =='; exec bash -l"
+if tmux has-session -t agentes 2>/dev/null; then tmux new-window -d -t agentes -n "$NOM" "$run"
+else tmux new-session -d -s agentes -n "$NOM" "$run"; fi
+echo "Lanzado $AG en tmux agentes:$NOM (rama $RAMA). Registro: $LOG"
