@@ -51,7 +51,7 @@ fi
 for SCRIPT in claude-arranque claude-guardar-abiertas claude-nueva-sesion; do
   install -o root -g root -m 755 "$RAIZ/servidor/$SCRIPT" "/usr/local/bin/$SCRIPT"
 done
-for CARPETA in "$CASA/.config" "$CASA/.config/systemd" "$CASA/.config/systemd/user" "$CASA/.config/claude-arranque"; do
+for CARPETA in "$CASA/work" "$CASA/.config" "$CASA/.config/systemd" "$CASA/.config/systemd/user" "$CASA/.config/claude-arranque"; do
   if [[ ! -d $CARPETA ]]; then install -d -o "$UID_USUARIO" -g "$GID_USUARIO" -m 755 "$CARPETA"; fi
 done
 for UNIDAD in "$TEMPORAL"/*; do
