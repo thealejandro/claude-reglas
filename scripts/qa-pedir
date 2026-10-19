@@ -18,11 +18,20 @@ DIR="/home/dev/work/_logs/qa/$(date +%Y%m%d-%H%M)-$PROYECTO"
 PROMPT=$(cat -- "$ENC") || exit 1
 PROMPT+=$'\n\nInstrucciones fijas de QA:\n'
 PROMPT+="Usa las herramientas MCP chrome-devtools. Guarda capturas, video y hojas de contacto en $DIR. "
-PROMPT+='Sigue skills/otros-agentes/SKILL.md: graba con screencast_start/screencast_stop; genera y revisa todas las hojas en orden con ffmpeg -loglevel error -i video.mp4 -vf "mpdecimate,setpts=N/FRAME_RATE/TB,scale=320:-1,tile=4x3" -fps_mode vfr hoja_%02d.png. Cruza la evidencia con la traza de rendimiento. '
+PROMPT+="Graba la interacción con screencast_start (filePath $DIR/video.mp4) y screencast_stop. Bash solo admite ffmpeg: ejecuta exactamente, en un único comando y sin cd ni &&: ffmpeg -loglevel error -i $DIR/video.mp4 -vf \"mpdecimate,setpts=N/FRAME_RATE/TB,scale=320:-1,tile=4x3\" -fps_mode vfr $DIR/hoja_%02d.png ; luego revisa TODAS las hojas en orden con Read (no fotogramas sueltos) y cruza lo que veas con la traza. "
 PROMPT+='Escribe informe.md en esa carpeta: resumen, problemas con evidencia, métricas LCP/INP/CLS y recomendaciones. Si una métrica no se puede medir, indica la limitación; no inventes valores. No toques repos ni hagas commits. Solo escribe dentro de la carpeta de resultados.'
 # Sintaxis contrastada con claude --help y https://code.claude.com/docs/en/permissions.
 # Write comprueba reglas Edit(path); no se concede Write ni Bash sin alcance.
-CLAUDE=(timeout 45m claude -p --model claude-sonnet-5-5
+# Solo el navegador: sin --strict-mcp-config, -p carga completos todos los conectores de la cuenta (~200K tokens).
+NAV=(--headless --isolated)
+[[ -x "$HOME/.local/bin/chromium-qa" ]] && NAV+=(--executablePath "$HOME/.local/bin/chromium-qa")
+if [[ -x "$HOME/.local/bin/chrome-devtools-mcp" ]]; then
+    MCP_CMD="$HOME/.local/bin/chrome-devtools-mcp"
+else
+    MCP_CMD=npx; NAV=(-y chrome-devtools-mcp@latest "${NAV[@]}")
+fi
+MCP=$(python3 -I -c 'import json,sys; print(json.dumps({"mcpServers": {"chrome-devtools": {"command": sys.argv[1], "args": sys.argv[2:]}}}))' "$MCP_CMD" "${NAV[@]}")
+CLAUDE=(timeout 45m claude -p --model claude-sonnet-5-5 --strict-mcp-config --mcp-config "$MCP"
     --permission-mode dontAsk --tools Read,Write,Bash
     --allowedTools 'mcp__chrome-devtools__*' "Read(/$DIR/**)" "Edit(/$DIR/**)" 'Bash(ffmpeg *)'
     -- "$PROMPT")
