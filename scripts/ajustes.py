@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 
 
@@ -19,6 +20,32 @@ def escribir_atomico(ruta, contenido):
     finally:
         if temporal is not None:
             temporal.unlink(missing_ok=True)
+
+
+def navegador_mcp():
+    """Chrome DevTools MCP sin interfaz; usa el Chromium de Playwright si lo hay."""
+    args = ['-y', 'chrome-devtools-mcp@latest', '--headless', '--isolated']
+    chromes = sorted(Path.home().glob('.cache/ms-playwright/chromium-*/chrome-linux*/chrome'))
+    if chromes:
+        args += ['--executablePath', str(chromes[-1])]
+    return args
+
+
+def configurar_otros_agentes():
+    """Da a Codex y Kimi, si están instalados, el mismo navegador para QA que usa Claude."""
+    args = navegador_mcp()
+    kimi = Path.home() / '.kimi-code'
+    if kimi.is_dir():
+        ruta = kimi / 'mcp.json'
+        datos = json.loads(ruta.read_text(encoding='utf-8')) if ruta.exists() else {}
+        servidores = datos.setdefault('mcpServers', {})
+        if 'chrome-devtools' not in servidores:
+            servidores['chrome-devtools'] = {'command': 'npx', 'args': args}
+            escribir_atomico(ruta, json.dumps(datos, indent=2, ensure_ascii=False) + '\n')
+    codex = Path.home() / '.codex' / 'config.toml'
+    if shutil.which('codex') and codex.exists() and '[mcp_servers.chrome-devtools]' not in codex.read_text(encoding='utf-8'):
+        subprocess.run(['codex', 'mcp', 'add', 'chrome-devtools', '--', 'npx', *args],
+                       capture_output=True, timeout=10, check=False)
 
 
 def aplicar(si_hace_falta):
@@ -45,6 +72,12 @@ def aplicar(si_hace_falta):
     marketplace = datos.setdefault('extraKnownMarketplaces', {}).setdefault('thealejandro', {})
     marketplace['source'] = {'source': 'github', 'repo': 'thealejandro/claude-reglas'}
     marketplace['autoUpdate'] = True
+    if Path('/usr/local/bin/agente-lanzar').exists():
+        # Sin esta regla el modo auto bloquea el lanzamiento de Codex y Kimi.
+        permitir = datos['permissions'].setdefault('allow', [])
+        for regla in ['Bash(agente-lanzar *)', 'Bash(/usr/local/bin/agente-lanzar *)']:
+            if regla not in permitir:
+                permitir.append(regla)
 
     carpeta.mkdir(parents=True, exist_ok=True)
     if datos != anteriores:
@@ -54,6 +87,7 @@ def aplicar(si_hace_falta):
                 respaldo = Path(copia.name)
             shutil.copyfile(ruta, respaldo)
         escribir_atomico(ruta, json.dumps(datos, indent=2, ensure_ascii=False) + '\n')
+    configurar_otros_agentes()
     if not marca.exists() or marca.read_text(encoding='utf-8').strip() != version:
         escribir_atomico(marca, version + '\n')
     if not si_hace_falta:

@@ -49,6 +49,10 @@ install -m 755 "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | sort
 
 Uso: `agente-lanzar codex ~/work/repo-tarea ~/work/_logs/encargo.md`. Codex corre sin su sandbox (bwrap no puede crear namespaces en Ubuntu con AppArmor); los límites son los de arriba más el usuario `dev` sin sudo.
 
+## Navegador para QA en todos los agentes (1.3.1)
+
+`ajustes.py` registra Chrome DevTools MCP (`npx -y chrome-devtools-mcp@latest --headless --isolated`, con el Chromium de Playwright si existe) en Codex (`codex mcp add`) y Kimi (`~/.kimi-code/mcp.json`) cuando están instalados, y añade el permiso de `agente-lanzar` si el lanzador existe. No toca entradas que ya existan.
+
 ## Ajustes automáticos (1.3.0)
 
 En `SessionStart`, además de mostrar `REGLAS.md`, se ejecuta:
