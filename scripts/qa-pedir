@@ -31,7 +31,8 @@ else
     MCP_CMD=npx; NAV=(-y chrome-devtools-mcp@latest "${NAV[@]}")
 fi
 MCP=$(python3 -I -c 'import json,sys; print(json.dumps({"mcpServers": {"chrome-devtools": {"command": sys.argv[1], "args": sys.argv[2:]}}}))' "$MCP_CMD" "${NAV[@]}")
-CLAUDE=(timeout 45m claude -p --model claude-sonnet-5-5 --strict-mcp-config --mcp-config "$MCP"
+# Sin --no-session-persistence, cada prueba deja su conversación en ~/.claude/projects para siempre.
+CLAUDE=(timeout 45m claude -p --no-session-persistence --model claude-sonnet-5-5 --strict-mcp-config --mcp-config "$MCP"
     --permission-mode dontAsk --tools Read,Write,Bash
     --allowedTools 'mcp__chrome-devtools__*' "Read(/$DIR/**)" "Edit(/$DIR/**)" 'Bash(ffmpeg *)'
     -- "$PROMPT")
@@ -59,6 +60,8 @@ fi
 mkdir -p /home/dev/work/_logs/qa || exit 1
 # Sin basura acumulada: los resultados (videos, capturas) se borran a los 14 días.
 find /home/dev/work/_logs/qa -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf -- {} +
+# Conversaciones de pruebas de versiones anteriores a 1.5.3, que sí las guardaban.
+find "$HOME/.claude/projects" -mindepth 1 -maxdepth 1 -type d -name '-home-dev-work--logs-qa-*' -mtime +14 -exec rm -rf -- {} + 2>/dev/null || true
 mkdir -- "$DIR" || exit 1
 if tmux has-session -t '=qa' 2>/dev/null; then
     tmux new-window -d -t qa: -n "qa-$PROYECTO" bash -c "$RUN"
