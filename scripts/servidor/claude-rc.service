@@ -1,0 +1,20 @@
+[Unit]
+Description=Claude Code Remote Control (@EQUIPO@)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/work
+Environment="PATH=@PATH@"
+ExecStart=/usr/bin/env claude remote-control --name @EQUIPO@ --spawn same-dir --capacity 16 --permission-mode auto
+Restart=always
+RestartSec=20
+# SIGINT = Ctrl+C: las sesiones quedan reanudables
+KillSignal=SIGINT
+KillMode=mixed
+TimeoutStopSec=30
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=default.target

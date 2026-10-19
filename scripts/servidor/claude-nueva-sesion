@@ -1,0 +1,70 @@
+#!/bin/bash
+# Uso: claude-nueva-sesion "<Nombre (equipo)>" [carpeta] [archivo-con-prompt-inicial]
+#      claude-nueva-sesion --retomar <session-id> "<Nombre (equipo)>" [carpeta]
+# Abre una sesión de Claude con Remote Control en una ventana con nombre de la sesión
+# tmux "sesiones" y la apunta en sesiones.conf para que vuelva sola tras un reinicio.
+# Ejecutar como el usuario del módulo.
+set -eu
+[[ $# -ge 1 ]] || { echo "Uso: claude-nueva-sesion <nombre> <carpeta> [encargo]" >&2; exit 2; }
+CONF="$HOME/.config/claude-arranque/sesiones.conf"
+TS=sesiones
+ID=""
+if [[ "${1:-}" == --retomar ]]; then [[ $# -ge 3 && $# -le 4 && -n "$2" ]] || exit 2; ID="$2"; shift 2; fi
+[[ $# -ge 1 && $# -le 3 && -n "$1" && "$1" != -* ]] || exit 2
+NOMBRE="$1"; DIR="${2:-$HOME/work}"; PROMPT="${3:-}"
+[[ -d "$DIR" ]] || { echo "No existe $DIR" >&2; exit 1; }
+CLAUDE=$(command -v claude) || { echo "No se encuentra claude en PATH" >&2; exit 1; }
+NOMBRE=$(printf %s "$NOMBRE" | tr "|'\"" '   ')
+[[ "$NOMBRE$DIR" != *$'\n'* && "$NOMBRE$DIR" != *'|'* ]] || exit 2
+WIN=$(printf %s "$NOMBRE" | tr -c 'A-Za-z0-9_.-' '-' | tr -s '-' | sed 's/^-//;s/-$//')
+mkdir -p "$HOME/.config/claude-arranque"
+exec 9>"$HOME/.config/claude-arranque/lanzar.lock"
+flock 9
+[[ -n "$WIN" ]] || { echo "Nombre de ventana vacío" >&2; exit 2; }
+if tmux list-windows -t "$TS" -F '#W' 2>/dev/null | grep -Fxq -- "$WIN"; then
+  echo "Ya hay una ventana $TS:$WIN" >&2; exit 1
+fi
+if [[ -n "$ID" ]]; then
+  for f in "$HOME"/.claude/sessions/*.json; do
+    python3 -I -c "import json,os,sys;d=json.load(open(sys.argv[1]));os.kill(int(d['pid']),0);sys.exit(d['sessionId']!=sys.argv[2])" "$f" "$ID" 2>/dev/null \
+      && { echo "La conversación $ID ya está abierta (${f##*/}); ciérrala antes" >&2; exit 1; }
+  done
+  ls "$HOME"/.claude/projects/*/"$ID".jsonl >/dev/null 2>&1 || { echo "No existe la conversación $ID" >&2; exit 1; }
+  args=(--resume "$ID")
+else
+  args=()
+  if [[ -n "$PROMPT" ]]; then
+    [[ -f "$PROMPT" ]] || { echo "No existe $PROMPT" >&2; exit 1; }
+    args+=("$(cat -- "$PROMPT")")
+  fi
+fi
+printf -v cmd 'cd -- %q && ' "$DIR"
+printf -v invocacion '%q ' "$CLAUDE" "${args[@]}" --remote-control "$NOMBRE" --name "$NOMBRE" --permission-mode auto
+cmd+="$invocacion; exec bash -l"
+if tmux has-session -t "$TS" 2>/dev/null; then
+  tmux new-window -d -t "$TS" -n "$WIN" bash -c "$cmd" 9>&-
+else
+  tmux new-session -d -s "$TS" -n "$WIN" -x 220 -y 50 bash -c "$cmd" 9>&-
+fi
+mkdir -p "${CONF%/*}"
+# Espera a que Claude registre la sesión para apuntar su id.
+for _ in $(seq 30); do
+  sleep 2
+  ID=$(python3 -I - "$HOME/.claude/sessions" "$NOMBRE" <<'PY'
+import json, os, sys, glob
+for f in glob.glob(os.path.join(sys.argv[1], '*.json')):
+    try:
+        d = json.load(open(f)); os.kill(int(d['pid']), 0)
+    except Exception:
+        continue
+    if d.get('name') == sys.argv[2] and d.get('entrypoint') == 'cli':
+        print(d['sessionId']); break
+PY
+)
+  [[ -n "$ID" ]] && break
+done
+if [[ -z "$ID" ]]; then
+  echo "Ventana $TS:$WIN abierta, pero no vi su id; no quedó en el arranque automático" >&2; exit 1
+fi
+grep -Fq -- "|$ID|" "$CONF" 2>/dev/null || echo "$WIN|$ID|$NOMBRE|$DIR" >> "$CONF"
+echo "Sesión «$NOMBRE» abierta en tmux $TS:$WIN (id $ID); vuelve sola tras reiniciar."

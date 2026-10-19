@@ -1,0 +1,45 @@
+#!/bin/bash
+# Uso: claude-arranque <sesion-tmux> <archivo.conf> [modo]
+# Retoma en tmux, cada una en su ventana y con Remote Control, las conversaciones de Claude
+# que falten: las fijas (<archivo.conf>) y las que estaban abiertas al apagar (abiertas.conf).
+# Espera a que haya red y omite las que ya están vivas (en tmux o abiertas desde la app),
+# así que se puede correr cuantas veces se quiera sin duplicar conversaciones.
+set -eu
+[[ $# -ge 2 && $# -le 3 ]] || { echo "Uso: claude-arranque <sesion-tmux> <archivo.conf> [modo]" >&2; exit 2; }
+TS="$1"; CONF="$2"; MODO="${3:-auto}"
+CLAUDE=$(command -v claude) || { echo "No se encuentra claude en PATH" >&2; exit 1; }
+ABIERTAS="${ABIERTAS:-$HOME/.config/claude-arranque/abiertas.conf}"
+LOG="$HOME/.local/state/claude-arranque.log"; mkdir -p "${LOG%/*}"
+mkdir -p "$HOME/.config/claude-arranque"
+exec 9>"$HOME/.config/claude-arranque/lanzar.lock"
+flock 9
+MAX=12
+for _ in $(seq 36); do
+  curl -s -o /dev/null --max-time 5 https://api.anthropic.com && break
+  sleep 5
+done
+vistos=" $(python3 -I - "$HOME/.claude/sessions" <<'PY' | tr '\n' ' '
+import json, os, sys, glob
+for f in glob.glob(os.path.join(sys.argv[1], '*.json')):
+    try:
+        d = json.load(open(f)); os.kill(int(d['pid']), 0); print(d['sessionId'])
+    except Exception:
+        pass
+PY
+) "
+n=0
+while IFS='|' read -r win id nombre dir; do
+  [[ -z "$win" || "$win" == \#* || -z "${id:-}" ]] && continue
+  [[ "$vistos" == *" $id "* ]] && continue
+  vistos+="$id "; n=$((n+1)); [[ $n -gt $MAX ]] && break
+  [[ -d "${dir:-}" ]] || dir="$HOME/work"; [[ -d "$dir" ]] || dir="$HOME"
+  win=$(printf %s "${nombre:-$win}" | tr -c 'A-Za-z0-9_.-' '-' | tr -s '-' | sed 's/^-//;s/-$//')
+  printf -v cmd 'cd -- %q && %q --resume %q --remote-control %q --name %q --permission-mode %q; exec bash -l' "$dir" "$CLAUDE" "$id" "$nombre" "$nombre" "$MODO"
+  echo "$(date '+%F %T') levanto «$nombre» ($id) en $TS:$win" >> "$LOG"
+  if tmux has-session -t "$TS" 2>/dev/null; then
+    tmux new-window -t "$TS" -n "$win" bash -c "$cmd" 9>&-
+  else
+    tmux new-session -d -s "$TS" -n "$win" -x 220 -y 50 bash -c "$cmd" 9>&-
+  fi
+done < <(cat "$CONF" "$ABIERTAS" 2>/dev/null)
+exit 0
