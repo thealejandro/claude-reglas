@@ -42,7 +42,7 @@ Actualizar: `claude plugin marketplace update thealejandro && claude plugin upda
 
 ```bash
 # En el servidor, como root:
-install -m 755 "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | tail -1)scripts/agente-lanzar" /usr/local/bin/agente-lanzar
+install -m 755 "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)scripts/agente-lanzar" /usr/local/bin/agente-lanzar
 # Para que el modo auto no lo bloquee, añade en settings.json de quien lo use:
 #   "permissions": { "allow": ["Bash(agente-lanzar *)"] }
 ```
