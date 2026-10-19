@@ -24,6 +24,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/anti-filtraciones.py\"",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }
