@@ -65,6 +65,14 @@ for UNIDAD in "$TEMPORAL"/*; do
     install -o "$UID_USUARIO" -g "$GID_USUARIO" -m 644 "$UNIDAD" "$DESTINO"
   fi
 done
+# Docker sin root: las sesiones necesitan su socket (drop-in aparte, no se pisa al reinstalar).
+if [[ -e "$CASA/.config/systemd/user/docker.service" ]]; then
+  for UNIDAD in claude-rc claude-sesiones claude-guardar-periodico; do
+    install -d -o "$UID_USUARIO" -g "$GID_USUARIO" -m 755 "$CASA/.config/systemd/user/$UNIDAD.service.d"
+    printf '[Service]\nEnvironment=DOCKER_HOST=unix:///run/user/%s/docker.sock\n' "$UID_USUARIO" > "$CASA/.config/systemd/user/$UNIDAD.service.d/docker.conf"
+    chown "$UID_USUARIO:$GID_USUARIO" "$CASA/.config/systemd/user/$UNIDAD.service.d/docker.conf"
+  done
+fi
 CONF="$CASA/.config/claude-arranque/sesiones.conf"
 if [[ ! -e $CONF ]]; then install -o "$UID_USUARIO" -g "$GID_USUARIO" -m 600 /dev/null "$CONF"; fi
 loginctl enable-linger "$U"
