@@ -26,6 +26,8 @@
 
 ## Push, PR y despliegue
 
+- En cada repo nuevo o sin estas protecciones, activar las alertas de Dependabot (`gh api -X PUT repos/OWNER/REPO/vulnerability-alerts`) y, si es público, el escaneo de secretos; avisar al usuario de las alertas abiertas.
+
 - Las sesiones de desarrollo trabajan en ramas propias, hacen push de esas ramas y abren la PR. Nunca push a `main`/`master` ni merge sin la confirmación del usuario.
 - El despliegue lo hace la sesión del servidor del proyecto (por ejemplo en Hestia). La sesión de desarrollo le avisa por `SendMessage` con: rama/PR, resumen de cambios para el usuario final, migraciones o cambios de datos, riesgos y cómo revertir.
 - La sesión del servidor no despliega hasta que el usuario dé su palabra: le muestra ese resumen, espera su OK, despliega y avisa del resultado a la sesión de desarrollo.
