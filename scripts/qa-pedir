@@ -1,0 +1,62 @@
+#!/bin/bash
+# Uso: qa-pedir [--simular] <proyecto> <encargo.md>
+# QA centralizado como dev, sin registrar sesiones ni revivir ventanas.
+set -u
+SIMULAR=0
+if [[ "${1:-}" == --simular ]]; then SIMULAR=1; shift; fi
+[[ $# == 2 ]] || { echo 'Uso: qa-pedir [--simular] <proyecto> <encargo.md>' >&2; exit 1; }
+PROYECTO="$1"
+[[ "$PROYECTO" =~ ^[A-Za-z0-9_-]+$ ]] || { echo 'Proyecto inválido: usa solo A-Za-z0-9_-' >&2; exit 1; }
+ENC=$(realpath -e -- "$2") || exit 1
+[[ "$ENC" == /home/dev/work/_logs/*.md && -f "$ENC" && -r "$ENC" ]] || { echo 'El encargo debe ser un archivo .md legible bajo /home/dev/work/_logs/' >&2; exit 1; }
+if [[ "$(id -un)" != dev ]]; then
+    OPCIONES=()
+    [[ "$SIMULAR" == 1 ]] && OPCIONES+=(--simular)
+    exec sudo -u dev -i "$0" "${OPCIONES[@]}" "$PROYECTO" "$ENC"
+fi
+DIR="/home/dev/work/_logs/qa/$(date +%Y%m%d-%H%M)-$PROYECTO"
+PROMPT=$(cat -- "$ENC") || exit 1
+PROMPT+=$'\n\nInstrucciones fijas de QA:\n'
+PROMPT+="Usa las herramientas MCP chrome-devtools. Guarda capturas, video y hojas de contacto en $DIR. "
+PROMPT+='Sigue skills/otros-agentes/SKILL.md: graba con screencast_start/screencast_stop; genera y revisa todas las hojas en orden con ffmpeg -loglevel error -i video.mp4 -vf "mpdecimate,setpts=N/FRAME_RATE/TB,scale=320:-1,tile=4x3" -fps_mode vfr hoja_%02d.png. Cruza la evidencia con la traza de rendimiento. '
+PROMPT+='Escribe informe.md en esa carpeta: resumen, problemas con evidencia, métricas LCP/INP/CLS y recomendaciones. Si una métrica no se puede medir, indica la limitación; no inventes valores. No toques repos ni hagas commits. Solo escribe dentro de la carpeta de resultados.'
+# Sintaxis contrastada con claude --help y https://code.claude.com/docs/en/permissions.
+# Write comprueba reglas Edit(path); no se concede Write ni Bash sin alcance.
+CLAUDE=(timeout 45m claude -p --model claude-sonnet-5-5
+    --permission-mode dontAsk --tools Read,Write,Bash
+    --allowedTools 'mcp__chrome-devtools__*' "Read(/$DIR/**)" "Edit(/$DIR/**)" 'Bash(ffmpeg *)'
+    -- "$PROMPT")
+printf -v CMD '%q ' "${CLAUDE[@]}"
+printf -v CARPETA '%q' "$DIR"
+RUN="cd $CARPETA || exit 1
+# Evitar que la configuración global deje ventanas muertas o cambie su nombre.
+tmux set-option -p -t \"\$TMUX_PANE\" remain-on-exit off
+tmux set-option -w -t \"\$TMUX_PANE\" automatic-rename off
+$CMD > ejecucion.log 2>&1
+codigo=\$?
+case \$codigo in
+    0) estado=ok ;;
+    124) estado=tiempo-agotado ;;
+    *) estado=fallo ;;
+esac
+printf '%s\\n' \"\$estado\" > estado
+"
+if [[ "$SIMULAR" == 1 ]]; then
+    printf 'Carpeta: %s\n' "$DIR"
+    printf 'Comando: bash -c %q\n' "$RUN"
+    exit 0
+fi
+# No mezclar resultados de dos encargos del mismo proyecto en el mismo minuto.
+mkdir -p /home/dev/work/_logs/qa || exit 1
+mkdir -- "$DIR" || exit 1
+if tmux has-session -t '=qa' 2>/dev/null; then
+    tmux new-window -d -t qa: -n "qa-$PROYECTO" bash -c "$RUN"
+else
+    tmux new-session -d -s qa -n "qa-$PROYECTO" bash -c "$RUN"
+fi
+if [[ $? != 0 ]]; then
+    printf 'fallo\n' > "$DIR/estado"
+    echo 'No se pudo lanzar la ventana de QA' >&2
+    exit 1
+fi
+printf '%s\n' "$DIR"

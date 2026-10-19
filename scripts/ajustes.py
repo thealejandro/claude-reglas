@@ -88,12 +88,12 @@ def aplicar(si_hace_falta):
     marketplace = datos.setdefault('extraKnownMarketplaces', {}).setdefault('thealejandro', {})
     marketplace['source'] = {'source': 'github', 'repo': 'thealejandro/claude-reglas'}
     marketplace['autoUpdate'] = True
-    if Path('/usr/local/bin/agente-lanzar').exists():
-        # Sin esta regla el modo auto bloquea el lanzamiento de Codex y Kimi.
-        permitir = datos['permissions'].setdefault('allow', [])
-        for regla in ['Bash(agente-lanzar *)', 'Bash(/usr/local/bin/agente-lanzar *)']:
-            if regla not in permitir:
-                permitir.append(regla)
+    for lanzador in ('agente-lanzar', 'qa-pedir'):
+        if Path('/usr/local/bin', lanzador).exists():
+            permitir = datos['permissions'].setdefault('allow', [])
+            for regla in [f'Bash({lanzador} *)', f'Bash(/usr/local/bin/{lanzador} *)']:
+                if regla not in permitir:
+                    permitir.append(regla)
 
     carpeta.mkdir(parents=True, exist_ok=True)
     if datos != anteriores:

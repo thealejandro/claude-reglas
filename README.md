@@ -49,6 +49,26 @@ install -m 755 "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | sort
 
 Uso: `agente-lanzar codex ~/work/repo-tarea ~/work/_logs/encargo.md`. Codex corre sin su sandbox (bwrap no puede crear namespaces en Ubuntu con AppArmor); los límites son los de arriba más el usuario `dev` sin sudo.
 
+## QA centralizado: `qa-pedir`
+
+En vmi3582043, instala el lanzador como `agente-lanzar` (como root):
+
+```bash
+install -m 755 "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)scripts/qa-pedir" /usr/local/bin/qa-pedir
+```
+
+Uso: `qa-pedir <proyecto> /home/dev/work/_logs/encargo.md`. El proyecto admite letras ASCII, números, `_` y `-`. Se relanza como `dev` y devuelve `/home/dev/work/_logs/qa/AAAAMMDD-HHMM-<proyecto>/`. Rechaza una carpeta ya existente para no mezclar encargos del mismo minuto. `qa-pedir --simular <proyecto> <encargo.md>` valida e imprime el comando sin crear resultados ni lanzar procesos de QA.
+
+Ejecuta Sonnet (`claude-sonnet-5-5`) durante un máximo de 45 minutos en tmux `qa`, ventana `qa-<proyecto>`, con Chrome DevTools MCP ya configurado. Guarda capturas, video, hojas de contacto, `informe.md` y `ejecucion.log`. Espera a que aparezca `estado`: `ok`, `fallo` o `tiempo-agotado` describen la ejecución, no si la interfaz pasó la revisión. La ventana termina sola; no se registra en `sesiones.conf` ni se revive.
+
+`ajustes.py` añade, si existe el lanzador instalado, `Bash(qa-pedir *)` y `Bash(/usr/local/bin/qa-pedir *)` a `permissions.allow` de quien lo use. Para configurarlo manualmente:
+
+```json
+{"permissions": {"allow": ["Bash(qa-pedir *)", "Bash(/usr/local/bin/qa-pedir *)"]}}
+```
+
+El proceso usa `dontAsk`, permite las herramientas de `chrome-devtools`, Read/Write en la carpeta de resultados (las escrituras usan reglas `Edit`) y `Bash(ffmpeg *)`, sin conceder Bash general. Sintaxis contrastada con `claude --help` y la [documentación de permisos](https://code.claude.com/docs/en/permissions). No modifica repos ni hace commits. Desde otra máquina, pide el QA por `SendMessage` a una sesión del servidor con URL, flujo, métricas y usuario de prueba, nunca credenciales de producción. Solo URLs alcanzables desde el servidor; localhost requiere staging o un túnel.
+
 ## Navegador para QA en todos los agentes (1.3.2)
 
 Un solo navegador compartido. En un servidor nuevo, como root: `bash "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)scripts/instalar-navegador.sh" dev` (librerías de Chromium, `xvfb`, fuentes, Chromium de Playwright y `chrome-devtools-mcp`; sin él se usa `npx`). `ajustes.py` crea `~/.local/bin/chromium-qa`, que arranca el Chromium de Playwright más reciente (sigue funcionando tras actualizar Playwright), y registra Chrome DevTools MCP (`--headless --isolated`) en Claude (`claude mcp add -s user`), Codex (`codex mcp add`), Kimi (`~/.kimi-code/mcp.json`) y Cursor (`~/.cursor/mcp.json`) cuando están instalados, y añade el permiso de `agente-lanzar` si el lanzador existe. No toca entradas que ya existan.
