@@ -88,7 +88,7 @@ def aplicar(si_hace_falta):
     marketplace = datos.setdefault('extraKnownMarketplaces', {}).setdefault('thealejandro', {})
     marketplace['source'] = {'source': 'github', 'repo': 'thealejandro/claude-reglas'}
     marketplace['autoUpdate'] = True
-    for lanzador in ('agente-lanzar', 'qa-pedir'):
+    for lanzador in ('agente-lanzar', 'qa-pedir', 'claude-nueva-sesion'):
         if Path('/usr/local/bin', lanzador).exists():
             permitir = datos['permissions'].setdefault('allow', [])
             for regla in [f'Bash({lanzador} *)', f'Bash(/usr/local/bin/{lanzador} *)']:

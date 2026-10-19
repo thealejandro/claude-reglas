@@ -138,3 +138,19 @@ HOME="$HOME_PRUEBA" python3 -I scripts/ajustes.py
 HOME="$HOME_PRUEBA" python3 -I scripts/ajustes.py --si-hace-falta
 python3 -m json.tool hooks/hooks.json > /dev/null
 ```
+
+## Módulo de servidor
+
+En el servidor Linux con systemd, como root (sustituye `usuario` y `nombre-equipo`):
+
+```bash
+bash "$(ls -d ~usuario/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)scripts/instalar-servidor.sh" usuario nombre-equipo
+```
+
+Añade `--simular` antes del usuario para revisar las unidades y operaciones sin instalarlas. Requiere Bash, Python 3, sudo, curl, flock y tmux, y `claude` instalado y autenticado para ese usuario, con Remote Control habilitado y `~/work` existente y confiable. Las opciones se contrastaron con los manuales de systemctl, loginctl y tmux y la [documentación oficial de Remote Control](https://code.claude.com/docs/en/remote-control) y del [CLI](https://code.claude.com/docs/en/cli-reference).
+
+Instala los tres scripts en `/usr/local/bin`, activa linger y habilita Remote Control con el nombre del equipo, `same-dir`, capacidad 16 y permisos `auto`. Retoma las sesiones fijas y las guardadas al apagar, espera la red y evita duplicar conversaciones vivas. Omite las abiertas desde la app (`sdk-cli`) al guardar; cada 15 minutos guarda las abiertas y revive solo las fijas caídas. No fija `DOCKER_HOST`.
+
+Conserva `~/.config/claude-arranque/sesiones.conf` existente; las unidades diferentes se respaldan en `.bak.*` con aviso antes de reemplazarlas. Las unidades ya activas incorporan los cambios en su siguiente arranque. El formato de sesiones es `ventana|id|nombre|carpeta`, una por línea.
+
+Uso como usuario del módulo: `claude-nueva-sesion "Proyecto (equipo)" ~/work/proyecto [archivo-encargo]`. También admite `--retomar <session-id> "Nombre (equipo)" [carpeta]`. La sesión queda registrada para próximos reinicios. `ajustes.py` permite ambos formatos del lanzador instalado en la siguiente sesión del plugin. Desde otro equipo, solicita la apertura por `SendMessage` a una sesión del servidor; en producción confirma primero con el usuario.

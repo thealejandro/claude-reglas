@@ -1,0 +1,29 @@
+#!/bin/bash
+# Guarda en ~/.config/claude-arranque/abiertas.conf las sesiones interactivas de Claude
+# que están vivas ahora (se llama al apagar), para retomarlas al arrancar.
+set -eu
+D="$HOME/.config/claude-arranque"; mkdir -p "$D"
+exec 9>"$D/guardar.lock"
+flock 9
+TEMPORAL=$(mktemp "$D/abiertas.conf.XXXXXX")
+trap 'rm -f -- "$TEMPORAL"' EXIT
+python3 -I - "$HOME/.claude/sessions" > "$TEMPORAL" <<'PY'
+import json, os, sys, glob
+n = 0
+for f in sorted(glob.glob(os.path.join(sys.argv[1], '*.json'))):
+    try:
+        d = json.load(open(f)); os.kill(int(d['pid']), 0)
+    except Exception:
+        continue
+    if d.get('kind') != 'interactive' or not d.get('sessionId'):
+        continue
+    if d.get('entrypoint') == 'sdk-cli':
+        continue  # abierta desde la app: el servicio claude-rc la retoma solo
+    if not any(os.path.getsize(t) > 0 for t in glob.glob(os.path.join(os.path.dirname(sys.argv[1]), 'projects', '*', d['sessionId'] + '.jsonl'))):
+        continue  # sesión sin conversación guardada: no se puede retomar
+    n += 1
+    nombre = (d.get('name') or d['sessionId'][:8]).replace('|', ' ').replace("'", ' ').replace("\n", " ")
+    carpeta = d.get("cwd", "").replace("|", " ").replace("\n", " ")
+    print(f"a{n}|{d['sessionId']}|{nombre}|{carpeta}")
+PY
+mv "$TEMPORAL" "$D/abiertas.conf"

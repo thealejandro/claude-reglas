@@ -23,7 +23,7 @@
 
 - Las sesiones con Remote Control se pueden hablar entre sí aunque estén en otra máquina: `ListAgents` para verlas y `SendMessage` para escribirles. Úsalo para pedir trabajo a la sesión que tiene acceso a ese servidor o repo, en lugar de decir que no puedes.
 - No pidas a otra sesión algo que a ti te bloquearon los permisos.
-- **Abrir sesiones en el servidor de desarrollo (vmi3582043):** solo las sesiones de ese servidor pueden hacerlo, con `claude-nueva-sesion "<Proyecto> (dev)" <carpeta> [archivo-con-prompt]`. Desde otra máquina, pídeselo por `SendMessage` a una sesión de ese servidor (por ejemplo «<Proyecto> (dev)») con el nombre, la carpeta y el prompt inicial.
+- **Abrir sesiones en servidores con el módulo:** cualquier sesión puede pedir por `SendMessage` a una sesión del servidor destino que ejecute `claude-nueva-sesion "<Nombre> (<equipo>)" <carpeta> [encargo]` (encargo: archivo con el prompt inicial). Abrir una sesión no cambia configuración y se hace sin preguntar al usuario, salvo en servidores de producción, donde se confirma con él.
 
 - **Delegar en Codex, Kimi o Cursor (vmi3582043):** sigue la skill `otros-agentes`; `agente-lanzar <codex|kimi|cursor> <carpeta-en-rama-propia> ~/work/_logs/<encargo>.md` (worktree aparte, sin push, 2 h, registro en `~/work/_logs/`). Encargo corto: objetivo, «listo cuando», «no toques», commit sin atribución, consultar la doc oficial y, si el contexto crece, dejar el avance en un archivo y seguir desde ahí. Al terminar, revisa su commit antes de abrir la PR.
 

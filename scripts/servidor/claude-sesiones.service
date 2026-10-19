@@ -1,0 +1,14 @@
+[Unit]
+Description=Retoma las sesiones de Claude de @EQUIPO@ en tmux al arrancar
+After=network-online.target claude-rc.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+TimeoutStartSec=10min
+RemainAfterExit=yes
+Environment="PATH=@PATH@"
+ExecStartPre=/bin/sleep 20
+ExecStart=/usr/local/bin/claude-arranque sesiones %h/.config/claude-arranque/sesiones.conf auto
+ExecStop=-/usr/bin/tmux kill-session -t sesiones
+[Install]
+WantedBy=default.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=Cada 15 min guarda las sesiones de Claude abiertas y revive las fijas caídas
+[Service]
+Environment="PATH=@PATH@"
+Type=oneshot
+TimeoutStartSec=10min
+ExecStart=/usr/local/bin/claude-guardar-abiertas
+# Revive las sesiones fijas que se hayan caído (no las abiertas a mano).
+ExecStart=/usr/bin/env ABIERTAS=/dev/null /usr/local/bin/claude-arranque sesiones %h/.config/claude-arranque/sesiones.conf auto

@@ -1,0 +1,11 @@
+[Unit]
+Description=Guarda las sesiones de Claude abiertas al apagar
+After=claude-sesiones.service claude-rc.service
+[Service]
+Environment="PATH=@PATH@"
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/usr/local/bin/claude-guardar-abiertas
+[Install]
+WantedBy=default.target

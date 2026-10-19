@@ -1,0 +1,7 @@
+[Unit]
+Description=Guarda las sesiones de Claude abiertas cada 15 min
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=15min
+[Install]
+WantedBy=timers.target
