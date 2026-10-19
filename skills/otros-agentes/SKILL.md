@@ -20,6 +20,9 @@ Todos (Claude incluido) tienen Chrome DevTools MCP con un Chromium compartido. S
 - abrir la página, recorrer el flujo con clics y formularios, y tomar capturas en móvil y escritorio;
 - traza de rendimiento (`performance_start_trace` con recarga): LCP, INP y CLS, con el elemento que causa cada salto de diseño;
 - consola y red sin errores; animaciones fluidas (sin tareas largas en la traza);
+- animaciones y saltos en movimiento: graba con `screencast_start`/`screencast_stop` (MP4) mientras haces la interacción, y revísalo en hojas de contacto sin fotogramas repetidos, en orden:
+  `ffmpeg -loglevel error -i video.mp4 -vf "mpdecimate,setpts=N/FRAME_RATE/TB,scale=320:-1,tile=4x3" -fps_mode vfr hoja_%02d.png`
+  No saques conclusiones de fotogramas sueltos al azar: mira todas las hojas y cruza lo que veas con la traza;
 - corregir, volver a medir y dejar el antes/después en el resumen.
 
 Si algo exige una ventana real, usa la pantalla virtual: `xvfb-run -a <comando>` (por ejemplo `xvfb-run -a npx playwright test --headed`). En un servidor nuevo, instálalo antes con `scripts/instalar-navegador.sh` del plugin (como root).
