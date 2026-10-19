@@ -57,6 +57,8 @@ if [[ "$SIMULAR" == 1 ]]; then
 fi
 # No mezclar resultados de dos encargos del mismo proyecto en el mismo minuto.
 mkdir -p /home/dev/work/_logs/qa || exit 1
+# Sin basura acumulada: los resultados (videos, capturas) se borran a los 14 días.
+find /home/dev/work/_logs/qa -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf -- {} +
 mkdir -- "$DIR" || exit 1
 if tmux has-session -t '=qa' 2>/dev/null; then
     tmux new-window -d -t qa: -n "qa-$PROYECTO" bash -c "$RUN"

@@ -9,6 +9,8 @@
 - `CLAUDE.md` de cada repo: se commitea y es compartido. Nunca metas ahí secretos, tokens, IPs, rutas privadas de servidores ni datos de clientes o pacientes; lo personal va en `CLAUDE.local.md` (en `.gitignore`).
 - Datos reales (facturas, expedientes, pacientes): nunca al repo; para tests usa fixtures anonimizados.
 - Antes de tocar una herramienta, CLI o configuración, consulta su documentación oficial (o su `--help`) en lugar de probar a ciegas; si no la hay, dilo.
+- Limpieza: al terminar, borra lo que creaste y ya no sirve (worktrees y ramas ya unidas, temporales, resultados de prueba). Nunca versiones cachés ni artefactos (`__pycache__`, `*.pyc`, builds): añádelos al `.gitignore` y usa `git add` con rutas concretas, no `-A`.
+- Sesiones automáticas (`claude -p`): carga solo los MCP que necesites con `--strict-mcp-config --mcp-config <json>`; si no, los conectores de la cuenta ocupan ~200K tokens de contexto antes de empezar.
 - Graphify: `graphify-out/` nunca se commitea; si el repo no lo ignora, añádelo a su `.gitignore`.
 
 ## Modelos y subagentes (optimiza la cuota)

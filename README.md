@@ -36,6 +36,8 @@ read -rsp 'Key de Jev: ' K; printf 'TYPESAFE_API_KEY=%s\n' "$K" > ~/.config/jev/
 
 Actualizar: `claude plugin marketplace update thealejandro && claude plugin update reglas@thealejandro`. Las sesiones cargan los cambios al iniciarse o retomarse.
 
+Los resultados de `qa-pedir` se borran solos a los 14 días.
+
 ## Delegar en Codex, Kimi y Cursor: `agente-lanzar` y skill `otros-agentes`
 
 `scripts/agente-lanzar` lanza Codex, Kimi o Cursor como `dev` en la sesión tmux `agentes`, sobre una carpeta de `~/work` en rama propia (nunca main/master/develop), sin poder hacer push (pushurl falso y `gh` sin sesión), con 2 h máximo y registro en `~/work/_logs/`.
