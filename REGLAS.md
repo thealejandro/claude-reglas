@@ -39,5 +39,7 @@
 
 ## Comandos para el usuario
 
+- Para ejecutar como otro usuario, pasa los comandos en un script por stdin (`sudo -u dev -i bash < script.sh`); con `sudo -i '...$VAR...'` las variables pueden quedar vacías. En pruebas usa `cd "${T:?}"` para abortar si la carpeta temporal no existe.
+
 - Cuando el usuario deba ejecutar algo, dale siempre el comando completo, listo para copiar, con la máquina y el usuario donde va (por ejemplo «en `ssh sdevR`, como root»). Nunca digas «ejecuta el comando anterior».
 - Lo que toque permisos, `sudo`, secretos o la configuración de Claude, no lo hagas por rutas indirectas: pásale el comando al usuario y explica en una línea qué hace.

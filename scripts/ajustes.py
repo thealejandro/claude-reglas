@@ -41,7 +41,7 @@ def navegador_mcp():
 
 
 def configurar_otros_agentes():
-    """Da a Codex, Kimi y Cursor, si están instalados, el mismo navegador para QA."""
+    """Da a Claude, Codex, Kimi y Cursor, si están instalados, el mismo navegador para QA."""
     comando, args = navegador_mcp()
     for carpeta, extra in (('.kimi-code', {}), ('.cursor', {'type': 'stdio'})):
         if not (Path.home() / carpeta).is_dir():
@@ -52,6 +52,11 @@ def configurar_otros_agentes():
         if datos.setdefault('mcpServers', {}).get('chrome-devtools') != nuevo:
             datos['mcpServers']['chrome-devtools'] = nuevo
             escribir_atomico(ruta, json.dumps(datos, indent=2, ensure_ascii=False) + '\n')
+    claude = shutil.which('claude') or str(Path.home() / '.local/bin/claude')
+    if Path(claude).exists():
+        subprocess.run([claude, 'mcp', 'remove', '-s', 'user', 'chrome-devtools'], capture_output=True, timeout=10, check=False)
+        subprocess.run([claude, 'mcp', 'add', '-s', 'user', 'chrome-devtools', '--', comando, *args],
+                       capture_output=True, timeout=10, check=False)
     codex = Path.home() / '.codex' / 'config.toml'
     if shutil.which('codex') and codex.exists():
         subprocess.run(['codex', 'mcp', 'remove', 'chrome-devtools'], capture_output=True, timeout=10, check=False)

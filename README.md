@@ -51,7 +51,7 @@ Uso: `agente-lanzar codex ~/work/repo-tarea ~/work/_logs/encargo.md`. Codex corr
 
 ## Navegador para QA en todos los agentes (1.3.2)
 
-Un solo navegador compartido: instala una vez `npm i -g --prefix ~/.local chrome-devtools-mcp` (si no, se usa `npx`). `ajustes.py` crea `~/.local/bin/chromium-qa`, que arranca el Chromium de Playwright más reciente (sigue funcionando tras actualizar Playwright), y registra Chrome DevTools MCP (`--headless --isolated`) en Codex (`codex mcp add`), Kimi (`~/.kimi-code/mcp.json`) y Cursor (`~/.cursor/mcp.json`) cuando están instalados, y añade el permiso de `agente-lanzar` si el lanzador existe. No toca entradas que ya existan.
+Un solo navegador compartido. En un servidor nuevo, como root: `bash "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)scripts/instalar-navegador.sh" dev` (librerías de Chromium, `xvfb`, fuentes, Chromium de Playwright y `chrome-devtools-mcp`; sin él se usa `npx`). `ajustes.py` crea `~/.local/bin/chromium-qa`, que arranca el Chromium de Playwright más reciente (sigue funcionando tras actualizar Playwright), y registra Chrome DevTools MCP (`--headless --isolated`) en Claude (`claude mcp add -s user`), Codex (`codex mcp add`), Kimi (`~/.kimi-code/mcp.json`) y Cursor (`~/.cursor/mcp.json`) cuando están instalados, y añade el permiso de `agente-lanzar` si el lanzador existe. No toca entradas que ya existan.
 
 ## Ajustes automáticos (1.3.0)
 

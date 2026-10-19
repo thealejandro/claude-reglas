@@ -14,7 +14,15 @@ description: Delegar en Codex, Kimi o Cursor una tarea acotada (tests, refactor 
 3. `agente-lanzar codex|kimi|cursor <worktree> <encargo>`: corre en tmux `agentes`, sin push, 2 h máximo, registro en `~/work/_logs/`.
 4. Al terminar, revisa su diff y corre las pruebas tú; corrige o descarta, y luego push de la rama y PR.
 
-Tienen el navegador Chrome DevTools MCP (sin ventana, pero renderiza todo: capturas, consola, red y trazas de rendimiento) para QA de interfaz.
+## QA de interfaz en el navegador
+
+Todos (Claude incluido) tienen Chrome DevTools MCP con un Chromium compartido. Sin ventana, pero dibuja la página completa. Pide en el encargo:
+- abrir la página, recorrer el flujo con clics y formularios, y tomar capturas en móvil y escritorio;
+- traza de rendimiento (`performance_start_trace` con recarga): LCP, INP y CLS, con el elemento que causa cada salto de diseño;
+- consola y red sin errores; animaciones fluidas (sin tareas largas en la traza);
+- corregir, volver a medir y dejar el antes/después en el resumen.
+
+Si algo exige una ventana real, usa la pantalla virtual: `xvfb-run -a <comando>` (por ejemplo `xvfb-run -a npx playwright test --headed`). En un servidor nuevo, instálalo antes con `scripts/instalar-navegador.sh` del plugin (como root).
 
 ## Solo lectura o segunda opinión
 
