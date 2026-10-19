@@ -25,7 +25,7 @@
 - No pidas a otra sesión algo que a ti te bloquearon los permisos.
 - **Abrir sesiones en el servidor de desarrollo (vmi3582043):** solo las sesiones de ese servidor pueden hacerlo, con `claude-nueva-sesion "<Proyecto> (dev)" <carpeta> [archivo-con-prompt]`. Desde otra máquina, pídeselo por `SendMessage` a una sesión de ese servidor (por ejemplo «<Proyecto> (dev)») con el nombre, la carpeta y el prompt inicial.
 
-- **Delegar en Codex o Kimi (vmi3582043):** `agente-lanzar <codex|kimi> <carpeta-en-rama-propia> ~/work/_logs/<encargo>.md` (worktree aparte, sin push, 2 h, registro en `~/work/_logs/`). Encargo corto: objetivo, «listo cuando», «no toques», commit sin atribución, consultar la doc oficial y, si el contexto crece, dejar el avance en un archivo y seguir desde ahí. Al terminar, revisa su commit antes de abrir la PR.
+- **Delegar en Codex, Kimi o Cursor (vmi3582043):** sigue la skill `otros-agentes`; `agente-lanzar <codex|kimi|cursor> <carpeta-en-rama-propia> ~/work/_logs/<encargo>.md` (worktree aparte, sin push, 2 h, registro en `~/work/_logs/`). Encargo corto: objetivo, «listo cuando», «no toques», commit sin atribución, consultar la doc oficial y, si el contexto crece, dejar el avance en un archivo y seguir desde ahí. Al terminar, revisa su commit antes de abrir la PR.
 
 ## Push, PR y despliegue
 

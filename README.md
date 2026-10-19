@@ -36,9 +36,9 @@ read -rsp 'Key de Jev: ' K; printf 'TYPESAFE_API_KEY=%s\n' "$K" > ~/.config/jev/
 
 Actualizar: `claude plugin marketplace update thealejandro && claude plugin update reglas@thealejandro`. Las sesiones cargan los cambios al iniciarse o retomarse.
 
-## Delegar en Codex y Kimi: `agente-lanzar`
+## Delegar en Codex, Kimi y Cursor: `agente-lanzar` y skill `otros-agentes`
 
-`scripts/agente-lanzar` lanza Codex o Kimi como `dev` en la sesión tmux `agentes`, sobre una carpeta de `~/work` en rama propia (nunca main/master/develop), sin poder hacer push (pushurl falso y `gh` sin sesión), con 2 h máximo y registro en `~/work/_logs/`.
+`scripts/agente-lanzar` lanza Codex, Kimi o Cursor como `dev` en la sesión tmux `agentes`, sobre una carpeta de `~/work` en rama propia (nunca main/master/develop), sin poder hacer push (pushurl falso y `gh` sin sesión), con 2 h máximo y registro en `~/work/_logs/`.
 
 ```bash
 # En el servidor, como root:
@@ -49,9 +49,9 @@ install -m 755 "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | sort
 
 Uso: `agente-lanzar codex ~/work/repo-tarea ~/work/_logs/encargo.md`. Codex corre sin su sandbox (bwrap no puede crear namespaces en Ubuntu con AppArmor); los límites son los de arriba más el usuario `dev` sin sudo.
 
-## Navegador para QA en todos los agentes (1.3.1)
+## Navegador para QA en todos los agentes (1.3.2)
 
-`ajustes.py` registra Chrome DevTools MCP (`npx -y chrome-devtools-mcp@latest --headless --isolated`, con el Chromium de Playwright si existe) en Codex (`codex mcp add`) y Kimi (`~/.kimi-code/mcp.json`) cuando están instalados, y añade el permiso de `agente-lanzar` si el lanzador existe. No toca entradas que ya existan.
+Un solo navegador compartido: instala una vez `npm i -g --prefix ~/.local chrome-devtools-mcp` (si no, se usa `npx`). `ajustes.py` crea `~/.local/bin/chromium-qa`, que arranca el Chromium de Playwright más reciente (sigue funcionando tras actualizar Playwright), y registra Chrome DevTools MCP (`--headless --isolated`) en Codex (`codex mcp add`), Kimi (`~/.kimi-code/mcp.json`) y Cursor (`~/.cursor/mcp.json`) cuando están instalados, y añade el permiso de `agente-lanzar` si el lanzador existe. No toca entradas que ya existan.
 
 ## Ajustes automáticos (1.3.0)
 

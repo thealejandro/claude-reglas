@@ -1,6 +1,6 @@
 {
   "name": "reglas",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Reglas de trabajo de thealejandro para todas sus sesiones de Claude Code: idioma, commits sin atribución, tickets, reparto de modelos con Jev, confirmación para producción y runbooks.",
   "author": { "name": "thealejandro" },
   "license": "UNLICENSED"

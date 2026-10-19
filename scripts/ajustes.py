@@ -23,28 +23,39 @@ def escribir_atomico(ruta, contenido):
 
 
 def navegador_mcp():
-    """Chrome DevTools MCP sin interfaz; usa el Chromium de Playwright si lo hay."""
-    args = ['-y', 'chrome-devtools-mcp@latest', '--headless', '--isolated']
-    chromes = sorted(Path.home().glob('.cache/ms-playwright/chromium-*/chrome-linux*/chrome'))
-    if chromes:
-        args += ['--executablePath', str(chromes[-1])]
-    return args
+    """Chrome DevTools MCP compartido: binario instalado una vez y Chromium de Playwright vía envoltorio."""
+    instalado = shutil.which('chrome-devtools-mcp') or str(Path.home() / '.local/bin/chrome-devtools-mcp')
+    if Path(instalado).exists():
+        comando, args = instalado, []
+    else:
+        comando, args = 'npx', ['-y', 'chrome-devtools-mcp@latest']
+    args += ['--headless', '--isolated']
+    if list(Path.home().glob('.cache/ms-playwright/chromium-*/chrome-linux*/chrome')):
+        # El envoltorio busca la versión más reciente al arrancar: sobrevive a las actualizaciones de Playwright.
+        envoltorio = Path.home() / '.local/bin/chromium-qa'
+        envoltorio.parent.mkdir(parents=True, exist_ok=True)
+        escribir_atomico(envoltorio, '#!/bin/sh\nexec "$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux*/chrome | sort -V | tail -1)" "$@"\n')
+        envoltorio.chmod(0o755)
+        args += ['--executablePath', str(envoltorio)]
+    return comando, args
 
 
 def configurar_otros_agentes():
-    """Da a Codex y Kimi, si están instalados, el mismo navegador para QA que usa Claude."""
-    args = navegador_mcp()
-    kimi = Path.home() / '.kimi-code'
-    if kimi.is_dir():
-        ruta = kimi / 'mcp.json'
+    """Da a Codex, Kimi y Cursor, si están instalados, el mismo navegador para QA."""
+    comando, args = navegador_mcp()
+    for carpeta, extra in (('.kimi-code', {}), ('.cursor', {'type': 'stdio'})):
+        if not (Path.home() / carpeta).is_dir():
+            continue
+        ruta = Path.home() / carpeta / 'mcp.json'
         datos = json.loads(ruta.read_text(encoding='utf-8')) if ruta.exists() else {}
-        servidores = datos.setdefault('mcpServers', {})
-        if 'chrome-devtools' not in servidores:
-            servidores['chrome-devtools'] = {'command': 'npx', 'args': args}
+        nuevo = {**extra, 'command': comando, 'args': args}
+        if datos.setdefault('mcpServers', {}).get('chrome-devtools') != nuevo:
+            datos['mcpServers']['chrome-devtools'] = nuevo
             escribir_atomico(ruta, json.dumps(datos, indent=2, ensure_ascii=False) + '\n')
     codex = Path.home() / '.codex' / 'config.toml'
-    if shutil.which('codex') and codex.exists() and '[mcp_servers.chrome-devtools]' not in codex.read_text(encoding='utf-8'):
-        subprocess.run(['codex', 'mcp', 'add', 'chrome-devtools', '--', 'npx', *args],
+    if shutil.which('codex') and codex.exists():
+        subprocess.run(['codex', 'mcp', 'remove', 'chrome-devtools'], capture_output=True, timeout=10, check=False)
+        subprocess.run(['codex', 'mcp', 'add', 'chrome-devtools', '--', comando, *args],
                        capture_output=True, timeout=10, check=False)
 
 
