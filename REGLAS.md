@@ -25,6 +25,9 @@
 
 - Las sesiones con Remote Control se pueden hablar entre sí aunque estén en otra máquina: `ListAgents` para verlas y `SendMessage` para escribirles. Úsalo para pedir trabajo a la sesión que tiene acceso a ese servidor o repo, en lugar de decir que no puedes.
 - No pidas a otra sesión algo que a ti te bloquearon los permisos.
+- Mensajes entre sesiones cortos (unas 5 líneas): el detalle va a un archivo y se manda solo su ruta; así no llenan el contexto de quien los recibe.
+- **Migrar una sesión** (por ejemplo, sacarla del home): escribe un traspaso sin secretos en `~/.config/claude-arranque/traspasos/<nombre>.md` (objetivo, estado, decisiones, pendientes, OKs pendientes), abre la nueva con `claude-nueva-sesion "<Nombre> (<equipo>)" ~/work/<proyecto> <encargo>` (encargo: «lee el traspaso y espera al usuario») y avisa al usuario para que cierre la vieja con `/exit`. Escribir el traspaso pide permiso al usuario en el chat.
+- Tras actualizar el plugin basta con `/reload-plugins` en cada sesión; no hace falta reiniciarlas.
 - **Abrir sesiones en servidores con el módulo:** cualquier sesión puede pedir por `SendMessage` a una sesión del servidor destino que ejecute `claude-nueva-sesion "<Nombre> (<equipo>)" <carpeta> [encargo]` (encargo: archivo con el prompt inicial). Abrir una sesión no cambia configuración y se hace sin preguntar al usuario, salvo en servidores de producción, donde se confirma con él.
 
 - **Delegar en Codex, Kimi o Cursor (vmi3582043):** sigue la skill `otros-agentes`; `agente-lanzar <codex|kimi|cursor> <carpeta-en-rama-propia> ~/work/_logs/<encargo>.md` (worktree aparte, sin push, 2 h, registro en `~/work/_logs/`). Encargo corto: objetivo, «listo cuando», «no toques», commit sin atribución, consultar la doc oficial y, si el contexto crece, dejar el avance en un archivo y seguir desde ahí. Al terminar, revisa su commit antes de abrir la PR.
@@ -37,6 +40,7 @@
 
 - Las sesiones de desarrollo trabajan en ramas propias, hacen push de esas ramas y abren la PR. Nunca push a `main`/`master` ni merge sin la confirmación del usuario.
 - El despliegue lo hace la sesión del servidor del proyecto (por ejemplo en Hestia). La sesión de desarrollo le avisa por `SendMessage` con: rama/PR, resumen de cambios para el usuario final, migraciones o cambios de datos, riesgos y cómo revertir.
+- Escribe los push a `main`, merges, releases y despliegues como comandos visibles (no dentro de un script pasado por stdin ni de `bash -c`): así la regla de permiso te pregunta en el chat; escondidos, el modo auto los bloquea sin preguntar.
 - La sesión del servidor no despliega hasta que el usuario dé su palabra: le muestra ese resumen, espera su OK, despliega y avisa del resultado a la sesión de desarrollo.
 - Si a una sesión le bloquean un push o una PR por permisos, se lo dice al usuario con el comando exacto; no lo delega en otra sesión.
 - Cada repo con despliegue debe tener CI que corra tests y build en cada PR, y documentado en su runbook cómo se despliega, cómo se verifica y cómo se revierte. Si falta, abre un issue para crearlo.

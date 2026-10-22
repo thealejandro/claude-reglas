@@ -84,3 +84,6 @@ systemctl --user daemon-reload
 systemctl --user enable --now claude-rc.service claude-sesiones.service claude-guardar.service claude-guardar-periodico.timer
 COMO_USUARIO
 echo "Módulo de servidor instalado para $U ($EQUIPO)"
+# La confianza de una carpeta cubre sus subcarpetas; la del home nunca se guarda.
+echo "Último paso, una sola vez como $U: cd ~/work && claude, acepta la carpeta y sal con /exit."
+echo "Así las sesiones dentro de ~/work arrancan solas tras un reinicio sin pedir confianza."

@@ -82,6 +82,16 @@ def aplicar(si_hace_falta):
                   'Bash(git push origin master*)', 'Bash(git push * HEAD:main*)', 'Bash(gh release create *)']:
         if regla not in preguntar:
             preguntar.append(regla)
+    # Una regla ask pregunta al usuario incluso en modo auto (también por Remote Control),
+    # en vez de dejar que el clasificador bloquee la acción sin preguntar.
+    extra = ['Edit(~/.config/claude-arranque/traspasos/**)']
+    if Path('/usr/local/hestia').exists():
+        # Servidor de producción con Hestia: los cambios de sistema siempre preguntan.
+        extra += ['Bash(v-*)', 'Bash(apt install *)', 'Bash(apt-get install *)', 'Bash(apt upgrade*)',
+                  'Bash(apt-get upgrade*)', 'Bash(systemctl restart *)', 'Bash(systemctl reload *)']
+    for regla in extra:
+        if regla not in preguntar:
+            preguntar.append(regla)
     modelos = datos.setdefault('modelSettings', {})
     for modelo in ('claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'):
         modelos.setdefault(modelo, {}).setdefault('autoCompactWindow', 200000)

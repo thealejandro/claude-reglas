@@ -34,7 +34,7 @@ mkdir -p ~/.config/jev && chmod 700 ~/.config/jev
 read -rsp 'Key de Jev: ' K; printf 'TYPESAFE_API_KEY=%s\n' "$K" > ~/.config/jev/env; chmod 600 ~/.config/jev/env; unset K
 ```
 
-Actualizar: `claude plugin marketplace update thealejandro && claude plugin update reglas@thealejandro`. Las sesiones cargan los cambios al iniciarse o retomarse.
+Actualizar: `claude plugin marketplace update thealejandro && claude plugin update reglas@thealejandro`. Para cargarlos en una sesión abierta basta con `/reload-plugins`; las nuevas los cargan al iniciarse.
 
 Los resultados de `qa-pedir` se borran solos a los 14 días.
 
