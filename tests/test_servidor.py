@@ -102,6 +102,24 @@ class ServidorTest(unittest.TestCase):
         lineas = (self.home / '.config/claude-arranque/abiertas.conf').read_text().splitlines()
         self.assertEqual(lineas, [f'a1|0|Proyecto|{self.home}'])
 
+    def test_nueva_sesion_ignora_la_vieja_y_sustituye_su_linea(self):
+        sesiones = self.home / '.claude/sessions'
+        sesiones.mkdir(parents=True)
+        vieja = dict(pid=os.getpid(), sessionId='vieja', name='Proyecto (equipo)', entrypoint='cli')
+        (sesiones / 'vieja.json').write_text(json.dumps(vieja))
+        # tmux falso: al abrir la ventana, la nueva sesión se registra con el mismo nombre.
+        (self.home / 'nueva.json').write_text(json.dumps(dict(vieja, sessionId='nueva')))
+        self.ejecutable('tmux', '#!/bin/bash\n[[ $1 == has-session || $1 == list-windows ]] && exit 1\n'
+                        'cp "$HOME/nueva.json" "$HOME/.claude/sessions/nueva.json"\n')
+        self.ejecutable('claude', '#!/bin/bash\nexit 0\n')
+        conf = self.home / '.config/claude-arranque/sesiones.conf'
+        conf.parent.mkdir(parents=True)
+        conf.write_text(f'a1|vieja|Proyecto (equipo)|{self.home}\notra|x|Otra|{self.home}\n')
+        r = self.ejecutar(RAIZ / 'scripts/servidor/claude-nueva-sesion', 'Proyecto (equipo)', str(self.home))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(conf.read_text().splitlines(),
+                         [f'otra|x|Otra|{self.home}', f'Proyecto-equipo|nueva|Proyecto (equipo)|{self.home}'])
+
 
 if __name__ == '__main__':
     unittest.main()

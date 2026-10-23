@@ -38,6 +38,21 @@ else
     args+=("$(cat -- "$PROMPT")")
   fi
 fi
+# Ids de sesiones vivas con este nombre (cli). Las de antes de lanzar no son la nueva:
+# una sesión vieja con el mismo nombre puede seguir abierta durante una migración.
+vivas() {
+  python3 -I - "$HOME/.claude/sessions" "$NOMBRE" <<'PY'
+import json, os, sys, glob
+for f in glob.glob(os.path.join(sys.argv[1], '*.json')):
+    try:
+        d = json.load(open(f)); os.kill(int(d['pid']), 0)
+    except Exception:
+        continue
+    if d.get('name') == sys.argv[2] and d.get('entrypoint') == 'cli':
+        print(d['sessionId'])
+PY
+}
+PREVIAS=$(vivas)
 printf -v cmd 'cd -- %q && ' "$DIR"
 printf -v invocacion '%q ' "$CLAUDE" "${args[@]}" --remote-control "$NOMBRE" --name "$NOMBRE" --permission-mode auto
 cmd+="$invocacion; exec bash -l"
@@ -50,21 +65,17 @@ mkdir -p "${CONF%/*}"
 # Espera a que Claude registre la sesión para apuntar su id.
 for _ in $(seq 30); do
   sleep 2
-  ID=$(python3 -I - "$HOME/.claude/sessions" "$NOMBRE" <<'PY'
-import json, os, sys, glob
-for f in glob.glob(os.path.join(sys.argv[1], '*.json')):
-    try:
-        d = json.load(open(f)); os.kill(int(d['pid']), 0)
-    except Exception:
-        continue
-    if d.get('name') == sys.argv[2] and d.get('entrypoint') == 'cli':
-        print(d['sessionId']); break
-PY
-)
+  ID=$(vivas | grep -Fxv -f <(printf '%s\n' "$PREVIAS") | head -1 || true)
   [[ -n "$ID" ]] && break
 done
 if [[ -z "$ID" ]]; then
   echo "Ventana $TS:$WIN abierta, pero no vi su id; no quedó en el arranque automático" >&2; exit 1
 fi
-grep -Fq -- "|$ID|" "$CONF" 2>/dev/null || echo "$WIN|$ID|$NOMBRE|$DIR" >> "$CONF"
+# Sustituye la entrada de esta ventana o de este nombre en vez de acumular otra.
+NUEVO=$(mktemp "$CONF.XXXXXX")
+touch "$CONF"
+awk -F'|' -v w="$WIN" -v n="$NOMBRE" -v i="$ID" '$1 != w && $3 != n && $2 != i' "$CONF" > "$NUEVO"
+echo "$WIN|$ID|$NOMBRE|$DIR" >> "$NUEVO"
+chmod 600 "$NUEVO"
+mv -f -- "$NUEVO" "$CONF"
 echo "Sesión «$NOMBRE» abierta en tmux $TS:$WIN (id $ID); vuelve sola tras reiniciar."

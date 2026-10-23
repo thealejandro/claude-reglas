@@ -40,6 +40,7 @@
 
 - Las sesiones de desarrollo trabajan en ramas propias, hacen push de esas ramas y abren la PR. Nunca push a `main`/`master` ni merge sin la confirmación del usuario.
 - El despliegue lo hace la sesión del servidor del proyecto (por ejemplo en Hestia). La sesión de desarrollo le avisa por `SendMessage` con: rama/PR, resumen de cambios para el usuario final, migraciones o cambios de datos, riesgos y cómo revertir.
+- Un `git merge` o `git pull` sobre `main`/`master` te pregunta en el chat (hook `proteger-ramas`).
 - Escribe los push a `main`, merges, releases y despliegues como comandos visibles (no dentro de un script pasado por stdin ni de `bash -c`): así la regla de permiso te pregunta en el chat; escondidos, el modo auto los bloquea sin preguntar.
 - La sesión del servidor no despliega hasta que el usuario dé su palabra: le muestra ese resumen, espera su OK, despliega y avisa del resultado a la sesión de desarrollo.
 - Si a una sesión le bloquean un push o una PR por permisos, se lo dice al usuario con el comando exacto; no lo delega en otra sesión.
