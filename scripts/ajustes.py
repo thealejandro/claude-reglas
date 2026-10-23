@@ -6,6 +6,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
+import traceback
 
 # Servidor de producción: sin navegador y con preguntas para los cambios de sistema.
 HESTIA = Path('/usr/local/hestia')
@@ -144,8 +146,14 @@ def main():
         try:
             aplicar(True)
         except Exception:
-            # No bloquear SessionStart; sin marca nueva se reintentará en otra sesión.
-            pass
+            # No bloquear SessionStart, pero dejar rastro; sin marca nueva se reintentará en otra sesión.
+            try:
+                registro = Path.home() / '.local/state/reglas-ajustes.log'
+                registro.parent.mkdir(parents=True, exist_ok=True)
+                with registro.open('a', encoding='utf-8') as archivo:
+                    archivo.write(time.strftime('== %F %T\n') + traceback.format_exc())
+            except OSError:
+                pass
         return
     aplicar(False)
 

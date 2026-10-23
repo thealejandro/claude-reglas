@@ -45,5 +45,16 @@ class NavegadorTest(unittest.TestCase):
         self.assertIn('--headless', servidores['chrome-devtools']['args'])
 
 
+
+class RegistroTest(unittest.TestCase):
+    def test_si_hace_falta_registra_el_error_sin_fallar(self):
+        with tempfile.TemporaryDirectory() as temporal, \
+                mock.patch.dict(os.environ, HOME=temporal), \
+                mock.patch.object(ajustes, 'aplicar', side_effect=RuntimeError('fallo de prueba')), \
+                mock.patch('sys.argv', ['ajustes.py', '--si-hace-falta']):
+            ajustes.main()
+            registro = (Path(temporal) / '.local/state/reglas-ajustes.log').read_text()
+        self.assertIn('RuntimeError: fallo de prueba', registro)
+
 if __name__ == '__main__':
     unittest.main()

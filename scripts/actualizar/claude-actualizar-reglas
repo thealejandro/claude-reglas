@@ -1,0 +1,17 @@
+#!/bin/bash
+# Actualiza el plugin reglas y aplica sus ajustes sin abrir sesión.
+# Lo ejecuta a diario claude-actualizar-reglas@<usuario>.timer; también se puede lanzar a mano.
+# Las sesiones abiertas cargan la versión nueva con /reload-plugins o al reiniciarse.
+set -eu
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
+LOG="$HOME/.local/state/claude-actualizar-reglas.log"
+mkdir -p "${LOG%/*}"
+{
+  echo "== $(date '+%F %T')"
+  # Sin -y: si el marketplace declarase un comando, se rechaza en vez de aceptarlo solo.
+  claude plugin marketplace update thealejandro
+  claude plugin update reglas@thealejandro
+  RAIZ=$(ls -d "$HOME"/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)
+  python3 -I "${RAIZ}scripts/ajustes.py"
+} >> "$LOG" 2>&1
+tail -n 200 "$LOG" > "$LOG.tmp" && mv -f -- "$LOG.tmp" "$LOG"
