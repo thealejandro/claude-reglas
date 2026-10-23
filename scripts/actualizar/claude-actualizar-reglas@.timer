@@ -1,0 +1,8 @@
+[Unit]
+Description=Actualización diaria del plugin reglas de Claude para %i
+[Timer]
+OnCalendar=*-*-* 04:00
+RandomizedDelaySec=30min
+Persistent=true
+[Install]
+WantedBy=timers.target

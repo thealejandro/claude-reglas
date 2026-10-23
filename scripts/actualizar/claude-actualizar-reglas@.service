@@ -1,0 +1,9 @@
+[Unit]
+Description=Actualiza el plugin reglas de Claude para %i
+Wants=network-online.target
+After=network-online.target
+[Service]
+Type=oneshot
+User=%i
+TimeoutStartSec=10min
+ExecStart=/usr/local/bin/claude-actualizar-reglas

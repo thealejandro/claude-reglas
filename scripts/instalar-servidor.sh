@@ -45,6 +45,7 @@ if (( SIMULAR )); then
   echo "sudo -u $U -i bash < script (por stdin)"
   echo 'systemctl --user daemon-reload'
   echo 'systemctl --user enable --now claude-rc.service claude-sesiones.service claude-guardar.service claude-guardar-periodico.timer'
+  echo "instalar-actualizacion.sh $U (actualización diaria del plugin)"
   cat "$TEMPORAL"/*
   exit 0
 fi
@@ -83,6 +84,7 @@ export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 systemctl --user daemon-reload
 systemctl --user enable --now claude-rc.service claude-sesiones.service claude-guardar.service claude-guardar-periodico.timer
 COMO_USUARIO
+bash "$RAIZ/instalar-actualizacion.sh" "$U"
 echo "Módulo de servidor instalado para $U ($EQUIPO)"
 # La confianza de una carpeta cubre sus subcarpetas; la del home nunca se guarda.
 echo "Último paso, una sola vez como $U: cd ~/work && claude, acepta la carpeta y sal con /exit."

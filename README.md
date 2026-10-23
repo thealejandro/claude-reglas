@@ -155,4 +155,16 @@ Instala los tres scripts en `/usr/local/bin`, activa linger y habilita Remote Co
 
 Conserva `~/.config/claude-arranque/sesiones.conf` existente; las unidades diferentes se respaldan en `.bak.*` con aviso antes de reemplazarlas. Las unidades ya activas incorporan los cambios en su siguiente arranque. El formato de sesiones es `ventana|id|nombre|carpeta`, una por línea.
 
+También activa la actualización diaria del plugin para ese usuario (ver abajo).
+
+### Actualización diaria del plugin
+
+El `autoUpdate` del marketplace no basta en servidores donde las sesiones viven días. Como root:
+
+```bash
+bash "$(ls -d ~usuario/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)scripts/instalar-actualizacion.sh" usuario [otro-usuario...]
+```
+
+Sirve también para root. Instala `/usr/local/bin/claude-actualizar-reglas` y el temporizador de sistema `claude-actualizar-reglas@<usuario>.timer` (04:00 hora del servidor, hasta 30 min de margen aleatorio; si el equipo estaba apagado, se ejecuta al arrancar). Cada ejecución hace `claude plugin marketplace update thealejandro`, `claude plugin update reglas@thealejandro` y aplica `ajustes.py`; el registro queda en `~/.local/state/claude-actualizar-reglas.log`. No pasa `-y`: si el marketplace declarase un comando, la actualización se rechaza. Las sesiones abiertas cargan la versión nueva con `/reload-plugins` o al reiniciarse. Para actualizar al momento: `systemctl start claude-actualizar-reglas@usuario.service`. Si `ajustes.py` falla al arrancar una sesión, el error queda en `~/.local/state/reglas-ajustes.log`.
+
 Uso como usuario del módulo: `claude-nueva-sesion "Proyecto (equipo)" ~/work/proyecto [archivo-encargo]`. También admite `--retomar <session-id> "Nombre (equipo)" [carpeta]`. La sesión queda registrada para próximos reinicios. `ajustes.py` permite ambos formatos del lanzador instalado en la siguiente sesión del plugin. Desde otro equipo, solicita la apertura por `SendMessage` a una sesión del servidor; en producción confirma primero con el usuario.

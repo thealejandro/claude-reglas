@@ -45,6 +45,7 @@ class ServidorTest(unittest.TestCase):
         self.assertIn('ABIERTAS=/dev/null', r.stdout)
         self.assertIn('ExecStop=/usr/local/bin/claude-guardar-abiertas', r.stdout)
         self.assertIn('systemctl --user enable --now', r.stdout)
+        self.assertIn('instalar-actualizacion.sh prueba', r.stdout)
 
     def test_argumentos_invalidos(self):
         for args in ((), ('--simular',), ('--simular', 'prueba'),
@@ -56,6 +57,29 @@ class ServidorTest(unittest.TestCase):
                 r = self.ejecutar(INSTALAR, *args)
                 self.assertEqual(r.returncode, 2, r.stderr)
                 self.assertNotIn('CLI PROHIBIDO', r.stderr)
+
+    def test_actualizacion_simulada_y_argumentos(self):
+        r = self.ejecutar(RAIZ / 'scripts/instalar-actualizacion.sh', '--simular', 'prueba', 'root')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn('claude-actualizar-reglas@prueba.timer', r.stdout)
+        self.assertIn('claude-actualizar-reglas@root.timer', r.stdout)
+        self.assertIn('User=%i', r.stdout)
+        self.assertIn('Persistent=true', r.stdout)
+        for args in (('--simular',), ('--simular', '-x'), ('--simular', 'a b')):
+            with self.subTest(args=args):
+                self.assertEqual(self.ejecutar(RAIZ / 'scripts/instalar-actualizacion.sh', *args).returncode, 2)
+
+    def test_actualizador_registra_y_falla_si_falla_claude(self):
+        # El actualizador antepone ~/.local/bin al PATH: ahí va el claude falso.
+        local = self.home / '.local/bin'
+        local.mkdir(parents=True)
+        (local / 'claude').write_text('#!/bin/bash\necho "claude $*"\n[[ $2 == update ]] && exit 1\nexit 0\n')
+        (local / 'claude').chmod(0o755)
+        r = self.ejecutar(RAIZ / 'scripts/actualizar/claude-actualizar-reglas')
+        self.assertNotEqual(r.returncode, 0)
+        registro = (self.home / '.local/state/claude-actualizar-reglas.log').read_text()
+        self.assertIn('claude plugin marketplace update thealejandro', registro)
+        self.assertIn('claude plugin update reglas@thealejandro', registro)
 
     def test_usuario_inexistente(self):
         self.ejecutable('getent', '#!/bin/bash\nexit 2\n')
