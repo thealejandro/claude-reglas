@@ -7,6 +7,9 @@ import shutil
 import subprocess
 import tempfile
 
+# Servidor de producción: sin navegador y con preguntas para los cambios de sistema.
+HESTIA = Path('/usr/local/hestia')
+
 
 def escribir_atomico(ruta, contenido):
     """Evita dejar archivos incompletos si se interrumpe la escritura."""
@@ -41,27 +44,39 @@ def navegador_mcp():
 
 
 def configurar_otros_agentes():
-    """Da a Claude, Codex, Kimi y Cursor, si están instalados, el mismo navegador para QA."""
-    comando, args = navegador_mcp()
+    """Da a Claude, Codex, Kimi y Cursor, si están instalados, el mismo navegador para QA.
+
+    En producción lo quita: sin binario, el MCP se ejecuta con npx @latest (código sin fijar)
+    y la QA de navegador se hace en el servidor de desarrollo, no ahí.
+    """
+    produccion = HESTIA.exists()
+    if not produccion:
+        comando, args = navegador_mcp()
     for carpeta, extra in (('.kimi-code', {}), ('.cursor', {'type': 'stdio'})):
         if not (Path.home() / carpeta).is_dir():
             continue
         ruta = Path.home() / carpeta / 'mcp.json'
         datos = json.loads(ruta.read_text(encoding='utf-8')) if ruta.exists() else {}
-        nuevo = {**extra, 'command': comando, 'args': args}
-        if datos.setdefault('mcpServers', {}).get('chrome-devtools') != nuevo:
-            datos['mcpServers']['chrome-devtools'] = nuevo
+        servidores = datos.setdefault('mcpServers', {})
+        nuevo = None if produccion else {**extra, 'command': comando, 'args': args}
+        if servidores.get('chrome-devtools') != nuevo:
+            if nuevo is None:
+                del servidores['chrome-devtools']
+            else:
+                servidores['chrome-devtools'] = nuevo
             escribir_atomico(ruta, json.dumps(datos, indent=2, ensure_ascii=False) + '\n')
     claude = shutil.which('claude') or str(Path.home() / '.local/bin/claude')
     if Path(claude).exists():
         subprocess.run([claude, 'mcp', 'remove', '-s', 'user', 'chrome-devtools'], capture_output=True, timeout=10, check=False)
-        subprocess.run([claude, 'mcp', 'add', '-s', 'user', 'chrome-devtools', '--', comando, *args],
-                       capture_output=True, timeout=10, check=False)
+        if not produccion:
+            subprocess.run([claude, 'mcp', 'add', '-s', 'user', 'chrome-devtools', '--', comando, *args],
+                           capture_output=True, timeout=10, check=False)
     codex = Path.home() / '.codex' / 'config.toml'
     if shutil.which('codex') and codex.exists():
         subprocess.run(['codex', 'mcp', 'remove', 'chrome-devtools'], capture_output=True, timeout=10, check=False)
-        subprocess.run(['codex', 'mcp', 'add', 'chrome-devtools', '--', comando, *args],
-                       capture_output=True, timeout=10, check=False)
+        if not produccion:
+            subprocess.run(['codex', 'mcp', 'add', 'chrome-devtools', '--', comando, *args],
+                           capture_output=True, timeout=10, check=False)
 
 
 def aplicar(si_hace_falta):
@@ -85,7 +100,7 @@ def aplicar(si_hace_falta):
     # Una regla ask pregunta al usuario incluso en modo auto (también por Remote Control),
     # en vez de dejar que el clasificador bloquee la acción sin preguntar.
     extra = ['Edit(~/.config/claude-arranque/traspasos/**)']
-    if Path('/usr/local/hestia').exists():
+    if HESTIA.exists():
         # Servidor de producción con Hestia: los cambios de sistema siempre preguntan.
         extra += ['Bash(v-*)', 'Bash(apt install *)', 'Bash(apt-get install *)', 'Bash(apt upgrade*)',
                   'Bash(apt-get upgrade*)', 'Bash(systemctl restart *)', 'Bash(systemctl reload *)']
