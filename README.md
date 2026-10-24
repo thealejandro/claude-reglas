@@ -8,7 +8,7 @@ Incluye:
 - Skill `desplegar`: resumen de producción como comentario en la PR, aviso a la sesión del servidor y despliegue solo con el OK del usuario.
 - Hook `jev-router`: Jev elige modelo y effort de cada subagente; los `Plan` van con Fable.
 - Hook `anti-filtraciones`: bloquea commits y pushes con secretos, archivos sensibles o datos reales.
-- `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, confirmación para producción, autocompact 200K).
+- `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, también sin enlace de sesión, confirmación para producción, autocompact 200K).
 
 ## Configuración
 
@@ -205,4 +205,4 @@ bash "$(ls -d ~usuario/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | 
 
 Sirve también para root. Instala `/usr/local/bin/claude-actualizar-reglas` y el temporizador de sistema `claude-actualizar-reglas@<usuario>.timer` (04:00 hora del servidor, hasta 30 min de margen aleatorio; si el equipo estaba apagado, se ejecuta al arrancar). Cada ejecución hace `claude plugin marketplace update thealejandro`, `claude plugin update reglas@thealejandro` y aplica `ajustes.py`; el registro queda en `~/.local/state/claude-actualizar-reglas.log`. No pasa `-y`: si el marketplace declarase un comando, la actualización se rechaza. Las sesiones abiertas cargan la versión nueva con `/reload-plugins` o al reiniciarse. Para actualizar al momento: `systemctl start claude-actualizar-reglas@usuario.service`. Si `ajustes.py` falla al arrancar una sesión, el error queda en `~/.local/state/reglas-ajustes.log`.
 
-Uso como usuario del módulo: `claude-nueva-sesion "Proyecto (equipo)" ~/work/proyecto [archivo-encargo]`. También admite `--retomar <session-id> "Nombre (equipo)" [carpeta]`. La sesión queda registrada para próximos reinicios. `ajustes.py` permite ambos formatos del lanzador instalado en la siguiente sesión del plugin. Desde otro equipo, solicita la apertura por `SendMessage` a una sesión del servidor; en producción confirma primero con el usuario.
+Uso como usuario del módulo: `claude-nueva-sesion "Proyecto (equipo)" ~/work/proyecto [archivo-encargo]`. También admite `--retomar <session-id> "Nombre (equipo)" [carpeta]`. La sesión queda registrada para próximos reinicios. Si Claude Code no tiene aceptada la confianza de la carpeta (en un repo cuenta su raíz, no la carpeta padre), la sesión se queda en ese diálogo: el script abre la ventana, sale con código 3 y da el `tmux attach` para aceptarla a mano. Después, `claude-nueva-sesion --registrar "Nombre (equipo)"` apunta la sesión ya abierta sin relanzarla (1.12.1). `ajustes.py` permite ambos formatos del lanzador instalado en la siguiente sesión del plugin. Desde otro equipo, solicita la apertura por `SendMessage` a una sesión del servidor; en producción confirma primero con el usuario.

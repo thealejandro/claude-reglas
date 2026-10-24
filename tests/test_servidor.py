@@ -159,6 +159,61 @@ class ServidorTest(unittest.TestCase):
         self.assertEqual(conf.read_text().splitlines(),
                          [f'otra|x|Otra|{self.home}', f'Proyecto-equipo|nueva|Proyecto (equipo)|{self.home}'])
 
+    def confianza(self, *carpetas):
+        proyectos = {str(c): {'hasTrustDialogAccepted': True} for c in carpetas}
+        (self.home / '.claude.json').write_text(json.dumps({'projects': proyectos}))
+
+    def test_nueva_sesion_avisa_si_la_carpeta_no_esta_aceptada(self):
+        # Aceptar ~/work no cubre un repo de dentro: la confianza va por la raíz del repo.
+        trabajo = self.home / 'work'
+        repo = trabajo / 'repo'
+        (repo / 'sub').mkdir(parents=True)
+        subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+        self.confianza(trabajo)
+        self.ejecutable('tmux', '#!/bin/bash\n[[ $1 == has-session || $1 == list-windows ]] && exit 1\n'
+                        'printf "%s\\n" "$*" >> "$HOME/tmux.log"\n')
+        self.ejecutable('claude', '#!/bin/bash\nexit 0\n')
+        r = self.ejecutar(RAIZ / 'scripts/servidor/claude-nueva-sesion', 'Repo (equipo)', str(repo / 'sub'))
+        self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertIn('tmux attach -t sesiones:Repo-equipo', r.stderr)
+        self.assertIn('claude-nueva-sesion --registrar Repo\\ \\(equipo\\)', r.stderr)
+        self.assertIn('new-session', (self.home / 'tmux.log').read_text())
+        self.assertFalse((self.home / '.config/claude-arranque/sesiones.conf').exists())
+
+    def test_confianza_por_raiz_del_repo_o_carpeta_padre(self):
+        trabajo = self.home / 'work'
+        repo = trabajo / 'repo'
+        suelta = trabajo / 'suelta/honda'
+        suelta.mkdir(parents=True)
+        subprocess.run(['git', 'init', '-q', str(repo)], check=True)
+        (repo / 'sub').mkdir()
+        self.confianza(trabajo, repo)
+        self.ejecutable('tmux', '#!/bin/bash\n[[ $1 == has-session || $1 == list-windows ]] && exit 1\n'
+                        'cp "$HOME/nueva.json" "$HOME/.claude/sessions/nueva.json"\n')
+        self.ejecutable('claude', '#!/bin/bash\nexit 0\n')
+        (self.home / '.claude/sessions').mkdir(parents=True)
+        for carpeta in (repo / 'sub', suelta):
+            with self.subTest(carpeta=carpeta):
+                (self.home / '.claude/sessions/nueva.json').unlink(missing_ok=True)
+                (self.home / 'nueva.json').write_text(json.dumps(dict(
+                    pid=os.getpid(), sessionId=carpeta.name, name='Prueba', entrypoint='cli')))
+                r = self.ejecutar(RAIZ / 'scripts/servidor/claude-nueva-sesion', 'Prueba', str(carpeta))
+                self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_registrar_apunta_una_sesion_abierta_sin_relanzarla(self):
+        # tmux y claude siguen siendo centinelas: --registrar no debe lanzar nada.
+        sesiones = self.home / '.claude/sessions'
+        sesiones.mkdir(parents=True)
+        (sesiones / 'a.json').write_text(json.dumps(dict(
+            pid=os.getpid(), sessionId='abierta', name='Repo (equipo)', entrypoint='cli', cwd=str(self.home))))
+        r = self.ejecutar(RAIZ / 'scripts/servidor/claude-nueva-sesion', '--registrar', 'Repo (equipo)')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        conf = self.home / '.config/claude-arranque/sesiones.conf'
+        self.assertEqual(conf.read_text().splitlines(), [f'Repo-equipo|abierta|Repo (equipo)|{self.home}'])
+        r = self.ejecutar(RAIZ / 'scripts/servidor/claude-nueva-sesion', '--registrar', 'Otra')
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('No hay ninguna sesión viva', r.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()
