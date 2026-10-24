@@ -44,12 +44,12 @@ if (( SIMULAR )); then
   echo "Crear $CASA/.config/claude-arranque/sesiones.conf vacío solo si no existe"
   echo "sudo -u $U -i bash < script (por stdin)"
   echo 'systemctl --user daemon-reload'
-  echo 'systemctl --user enable --now claude-rc.service claude-sesiones.service claude-guardar.service claude-guardar-periodico.timer'
+  echo 'systemctl --user enable --now claude-rc.service claude-sesiones.service claude-guardar.service claude-guardar-periodico.timer claude-reiniciar-sesiones.timer'
   echo "instalar-actualizacion.sh $U (actualización diaria del plugin)"
   cat "$TEMPORAL"/*
   exit 0
 fi
-for SCRIPT in claude-arranque claude-guardar-abiertas claude-nueva-sesion; do
+for SCRIPT in claude-arranque claude-guardar-abiertas claude-nueva-sesion claude-reiniciar-sesiones; do
   install -o root -g root -m 755 "$RAIZ/servidor/$SCRIPT" "/usr/local/bin/$SCRIPT"
 done
 for CARPETA in "$CASA/work" "$CASA/.config" "$CASA/.config/systemd" "$CASA/.config/systemd/user" "$CASA/.config/claude-arranque"; do
@@ -68,7 +68,7 @@ for UNIDAD in "$TEMPORAL"/*; do
 done
 # Docker sin root: las sesiones necesitan su socket (drop-in aparte, no se pisa al reinstalar).
 if [[ -e "$CASA/.config/systemd/user/docker.service" ]]; then
-  for UNIDAD in claude-rc claude-sesiones claude-guardar-periodico; do
+  for UNIDAD in claude-rc claude-sesiones claude-guardar-periodico claude-reiniciar-sesiones; do
     install -d -o "$UID_USUARIO" -g "$GID_USUARIO" -m 755 "$CASA/.config/systemd/user/$UNIDAD.service.d"
     printf '[Service]\nEnvironment=DOCKER_HOST=unix:///run/user/%s/docker.sock\n' "$UID_USUARIO" > "$CASA/.config/systemd/user/$UNIDAD.service.d/docker.conf"
     chown "$UID_USUARIO:$GID_USUARIO" "$CASA/.config/systemd/user/$UNIDAD.service.d/docker.conf"
@@ -82,7 +82,7 @@ set -eu
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 systemctl --user daemon-reload
-systemctl --user enable --now claude-rc.service claude-sesiones.service claude-guardar.service claude-guardar-periodico.timer
+systemctl --user enable --now claude-rc.service claude-sesiones.service claude-guardar.service claude-guardar-periodico.timer claude-reiniciar-sesiones.timer
 COMO_USUARIO
 bash "$RAIZ/instalar-actualizacion.sh" "$U"
 echo "Módulo de servidor instalado para $U ($EQUIPO)"
