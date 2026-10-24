@@ -10,7 +10,7 @@ El despliegue lo hace siempre la sesión del servidor del proyecto y solo con el
 ## En la sesión de desarrollo
 
 1. La rama tiene push y PR abierta con el CI en verde (`gh pr checks <n>`). Si el CI falla, para y dilo.
-2. Lee el runbook del proyecto (`infra-runbooks/<proyecto>/`): servidor, cómo se despliega, se verifica y se revierte. Si falta, abre un issue para crearlo y dilo.
+2. Lee el runbook del proyecto (en el repo de runbooks que indiquen las reglas; si no hay, la documentación del repo): servidor, cómo se despliega, se verifica y se revierte. Si falta, abre un issue para crearlo y dilo.
 3. Arma el resumen de producción a partir de `gh pr view <n>` y `git log --oneline origin/main..HEAD`:
    - **Qué cambia para el usuario final**, en lenguaje llano.
    - **Commits y PRs** incluidos.

@@ -29,7 +29,7 @@ Si algo exige una ventana real, usa la pantalla virtual: `xvfb-run -a <comando>`
 
 ## Pedir QA desde otra máquina
 
-Envía por `SendMessage` a una sesión de vmi3582043 la URL, el flujo, qué medir y un usuario de prueba; nunca credenciales de producción. La URL debe ser alcanzable desde el servidor: para localhost usa staging o un túnel.
+Envía por `SendMessage` a una sesión del servidor de desarrollo que indiquen las reglas la URL, el flujo, qué medir y un usuario de prueba; nunca credenciales de producción. La URL debe ser alcanzable desde el servidor: para localhost usa staging o un túnel.
 
 La sesión del servidor escribe el encargo en `~/work/_logs/<encargo>.md`, lanza `qa-pedir <proyecto> <encargo.md>` y espera el archivo `estado` en la carpeta devuelta. Devuelve `informe.md` y sus evidencias a quien lo pidió; si el estado es `fallo` o `tiempo-agotado`, comunica también esa limitación. Este QA solo observa y recomienda: no modifica repos ni hace commits.
 
