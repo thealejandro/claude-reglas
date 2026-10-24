@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "hooks" / "anti-filtraciones.py"
@@ -137,6 +138,17 @@ class AntiFiltracionesTests(unittest.TestCase):
                     self.assert_denied(self.run_hook(), relative, secret, prefix)
                 finally:
                     self.reset_and_remove(relative)
+
+    def test_bloquea_con_mnemonic_prefix(self):
+        self.write(".env")
+        self.stage(".env")
+        try:
+            with unittest.mock.patch.dict(os.environ, {"GIT_CONFIG_COUNT": "1",
+                    "GIT_CONFIG_KEY_0": "diff.mnemonicPrefix", "GIT_CONFIG_VALUE_0": "true"}):
+                output = self.decision(self.run_hook())
+            self.assertEqual(output["permissionDecision"], "deny")
+        finally:
+            self.reset_and_remove(".env")
 
     def test_bloquea_archivos_sensibles(self):
         paths = (".env", "certificado.pem", "servidor.key", "id_rsa", "id_ed25519", "_muestras/factura.xml")
