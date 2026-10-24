@@ -45,6 +45,19 @@ class NavegadorTest(unittest.TestCase):
         self.assertIn('--headless', servidores['chrome-devtools']['args'])
 
 
+class AtribucionTest(unittest.TestCase):
+    def test_quita_toda_la_atribucion_y_conserva_lo_demas(self):
+        with tempfile.TemporaryDirectory() as temporal, \
+                mock.patch.dict(os.environ, HOME=temporal), \
+                mock.patch.object(ajustes, 'configurar_otros_agentes'):
+            ajustes_json = Path(temporal) / '.claude/settings.json'
+            ajustes_json.parent.mkdir()
+            ajustes_json.write_text(json.dumps({'attribution': {'commit': 'x'}, 'theme': 'dark'}))
+            ajustes.aplicar(si_hace_falta=True)
+            datos = json.loads(ajustes_json.read_text())
+        self.assertEqual(datos['attribution'], {'commit': '', 'pr': '', 'sessionUrl': False})
+        self.assertEqual(datos['theme'], 'dark')
+
 
 class RegistroTest(unittest.TestCase):
     def test_si_hace_falta_registra_el_error_sin_fallar(self):

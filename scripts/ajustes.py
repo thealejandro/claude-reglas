@@ -93,7 +93,8 @@ def aplicar(si_hace_falta):
     original = ruta.read_text(encoding='utf-8') if ruta.exists() else None
     datos = json.loads(original) if original is not None else {}
     anteriores = json.loads(original) if original is not None else None
-    datos['attribution'] = {'commit': '', 'pr': ''}
+    # Sin atribución: ni trailer, ni línea en la PR, ni enlace de sesión (Remote Control y nube).
+    datos['attribution'] = {'commit': '', 'pr': '', 'sessionUrl': False}
     preguntar = datos.setdefault('permissions', {}).setdefault('ask', [])
     for regla in ['Bash(gh pr merge *)', 'Bash(gh api *merge*)', 'Bash(git push origin main*)',
                   'Bash(git push origin master*)', 'Bash(git push * HEAD:main*)', 'Bash(gh release create *)']:

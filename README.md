@@ -8,7 +8,7 @@ Incluye:
 - Skill `desplegar`: resumen de producción como comentario en la PR, aviso a la sesión del servidor y despliegue solo con el OK del usuario.
 - Hook `jev-router`: Jev elige modelo y effort de cada subagente; los `Plan` van con Fable.
 - Hook `anti-filtraciones`: bloquea commits y pushes con secretos, archivos sensibles o datos reales.
-- `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, confirmación para producción, autocompact 200K).
+- `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, también sin enlace de sesión, confirmación para producción, autocompact 200K).
 
 ## Configuración
 
