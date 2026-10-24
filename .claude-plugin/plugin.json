@@ -1,7 +1,14 @@
 {
   "name": "reglas",
-  "version": "1.11.0",
-  "description": "Reglas de trabajo de thealejandro para todas sus sesiones de Claude Code: idioma, commits sin atribución, tickets, reparto de modelos con Jev, confirmación para producción y runbooks.",
+  "version": "1.12.0",
+  "description": "Reglas de trabajo para sesiones de Claude Code: idioma, commits sin atribución, tickets, confirmación para producción, reparto de modelos con Jev; módulo de servidor opcional",
   "author": { "name": "thealejandro" },
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "userConfig": {
+    "idioma": { "type": "string", "title": "Idioma", "description": "Idioma en el que responde Claude (por defecto español)", "default": "español", "required": false },
+    "repo_runbooks": { "type": "string", "title": "Repo de runbooks", "description": "Repo donde se documenta cada proyecto (vacío: sin regla de runbooks)", "default": "", "required": false },
+    "servidores": { "type": "string", "title": "Servidores", "description": "Equipos con el módulo de servidor, separados por comas (vacío: sin reglas de servidores)", "default": "", "required": false },
+    "servidor_desarrollo": { "type": "string", "title": "Servidor de desarrollo", "description": "Equipo donde se delega en otros agentes y se hace QA (vacío: sin esas reglas)", "default": "", "required": false },
+    "jev_api_key": { "type": "string", "title": "Key de Jev", "description": "Key de Jev (TypeSafe) para repartir modelos; alternativa a ~/.config/jev/env", "sensitive": true, "required": false }
+  }
 }

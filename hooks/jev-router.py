@@ -3,7 +3,8 @@
 
 Red de seguridad: sin key, con error, timeout (3 s) o confianza baja, no cambia nada
 y se queda la elección del orquestador. Los planes siempre van a Fable.
-Key en ~/.config/jev/env (TYPESAFE_API_KEY=...), modo 600.
+Key: opción jev_api_key del plugin (CLAUDE_PLUGIN_OPTION_JEV_API_KEY) o, si no,
+~/.config/jev/env (TYPESAFE_API_KEY=...), modo 600.
 """
 import json, os, sys, time, urllib.request
 
@@ -18,6 +19,9 @@ def log(msg):
         pass
 
 def key():
+    k = os.environ.get('CLAUDE_PLUGIN_OPTION_JEV_API_KEY', '').strip()
+    if k:
+        return k
     try:
         for line in open(os.path.expanduser('~/.config/jev/env')):
             k, _, v = line.strip().partition('=')

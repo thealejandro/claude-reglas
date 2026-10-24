@@ -1,14 +1,38 @@
 # reglas — plugin de Claude Code
 
-Reglas comunes para todas las sesiones de Claude Code de thealejandro, en cualquier máquina (servidor de desarrollo, Hestia, Windows, Mac).
+Reglas comunes para las sesiones de Claude Code, en cualquier máquina. Son configurables (ver «Configuración»): lo que no se configura no inyecta sus reglas.
 
 Incluye:
-- `REGLAS.md`, inyectado al inicio de cada sesión (hook `SessionStart`).
+- Las reglas, inyectadas al inicio de cada sesión (hook `SessionStart`, `scripts/reglas.py`): `REGLAS.md` más los bloques de `reglas/` cuyas opciones estén configuradas.
 - Skill `commit`: commits convencionales en el idioma del repo, sin atribución, sin push a `main` sin permiso. Corre en Haiku.
 - Skill `desplegar`: resumen de producción como comentario en la PR, aviso a la sesión del servidor y despliegue solo con el OK del usuario.
 - Hook `jev-router`: Jev elige modelo y effort de cada subagente; los `Plan` van con Fable.
 - Hook `anti-filtraciones`: bloquea commits y pushes con secretos, archivos sensibles o datos reales.
 - `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, confirmación para producción, autocompact 200K).
+
+## Configuración
+
+Al instalar o habilitar el plugin desde `/plugin` aparece un diálogo con estas opciones (ninguna es obligatoria):
+
+| Opción | Qué hace |
+|---|---|
+| `idioma` | Idioma de las respuestas (por defecto español). |
+| `repo_runbooks` | Repo de runbooks; sin él no se inyecta la regla de documentación. |
+| `servidores` | Equipos con el módulo de servidor; sin ellos no se inyectan las reglas de sesiones en servidores. |
+| `servidor_desarrollo` | Equipo para delegar en otros agentes y hacer QA; sin él no se inyectan esas reglas. |
+| `jev_api_key` | Key de Jev (sensible). Alternativa: `~/.config/jev/env`, que sigue valiendo. |
+
+`claude plugin install` en el shell no pregunta: usa `--config clave=valor`. Para reconfigurar, `/plugin configure reglas@thealejandro` o sin interacción:
+
+```bash
+printf '%s' '{"idioma":"español","repo_runbooks":"<repo>","servidores":"<equipo-dev>, <equipo-prod>","servidor_desarrollo":"<equipo-dev>"}' | claude plugin configure reglas@thealejandro --values-stdin
+```
+
+`claude plugin configure reglas@thealejandro` muestra qué falta. Los cambios requieren reiniciar o `/reload-plugins`.
+
+### Qué es específico del autor
+
+`qa-pedir` y `agente-lanzar` asumen el usuario `dev` y `/home/dev/work`; `instalar-chrome.sh` asume Ubuntu. Quien haga fork debe cambiar el marketplace en `ajustes.py`.
 
 ## Plugins recomendados (midudev/better-claude)
 
@@ -89,7 +113,7 @@ Un solo navegador compartido. En un servidor nuevo, como root: `bash "$(ls -d ~d
 
 ## Ajustes automáticos (1.3.0)
 
-En `SessionStart`, además de mostrar `REGLAS.md`, se ejecuta:
+En `SessionStart`, además de inyectar las reglas con `scripts/reglas.py`, se ejecuta:
 
 ```bash
 python3 -I "${CLAUDE_PLUGIN_ROOT}/scripts/ajustes.py" --si-hace-falta
@@ -150,7 +174,9 @@ HOME_PRUEBA=$(mktemp -d)
 HOME="$HOME_PRUEBA" python3 -I scripts/ajustes.py
 HOME="$HOME_PRUEBA" python3 -I scripts/ajustes.py
 HOME="$HOME_PRUEBA" python3 -I scripts/ajustes.py --si-hace-falta
+python3 -I scripts/reglas.py > /dev/null
 python3 -m json.tool hooks/hooks.json > /dev/null
+claude plugin validate .
 ```
 
 ## Módulo de servidor
