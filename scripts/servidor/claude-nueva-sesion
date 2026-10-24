@@ -1,47 +1,28 @@
 #!/bin/bash
 # Uso: claude-nueva-sesion "<Nombre (equipo)>" [carpeta] [archivo-con-prompt-inicial]
 #      claude-nueva-sesion --retomar <session-id> "<Nombre (equipo)>" [carpeta]
+#      claude-nueva-sesion --registrar "<Nombre (equipo)>"
 # Abre una sesión de Claude con Remote Control en una ventana con nombre de la sesión
 # tmux "sesiones" y la apunta en sesiones.conf para que vuelva sola tras un reinicio.
+# --registrar solo apunta una sesión ya abierta con ese nombre, sin relanzarla (por
+# ejemplo, después de aceptar a mano la confianza de su carpeta).
 # Ejecutar como el usuario del módulo.
 set -eu
 [[ $# -ge 1 ]] || { echo "Uso: claude-nueva-sesion <nombre> <carpeta> [encargo]" >&2; exit 2; }
 CONF="$HOME/.config/claude-arranque/sesiones.conf"
 TS=sesiones
-ID=""
-if [[ "${1:-}" == --retomar ]]; then [[ $# -ge 3 && $# -le 4 && -n "$2" ]] || exit 2; ID="$2"; shift 2; fi
+ID=""; REGISTRAR=""
+if [[ "${1:-}" == --retomar ]]; then [[ $# -ge 3 && $# -le 4 && -n "$2" ]] || exit 2; ID="$2"; shift 2
+elif [[ "${1:-}" == --registrar ]]; then [[ $# -eq 2 ]] || exit 2; REGISTRAR=1; shift; fi
 [[ $# -ge 1 && $# -le 3 && -n "$1" && "$1" != -* ]] || exit 2
 NOMBRE="$1"; DIR="${2:-$HOME/work}"; PROMPT="${3:-}"
-[[ -d "$DIR" ]] || { echo "No existe $DIR" >&2; exit 1; }
-CLAUDE=$(command -v claude) || { echo "No se encuentra claude en PATH" >&2; exit 1; }
 NOMBRE=$(printf %s "$NOMBRE" | tr "|'\"" '   ')
-[[ "$NOMBRE$DIR" != *$'\n'* && "$NOMBRE$DIR" != *'|'* ]] || exit 2
-WIN=$(printf %s "$NOMBRE" | tr -c 'A-Za-z0-9_.-' '-' | tr -s '-' | sed 's/^-//;s/-$//')
-mkdir -p "$HOME/.config/claude-arranque"
-exec 9>"$HOME/.config/claude-arranque/lanzar.lock"
-flock 9
-[[ -n "$WIN" ]] || { echo "Nombre de ventana vacío" >&2; exit 2; }
-if tmux list-windows -t "$TS" -F '#W' 2>/dev/null | grep -Fxq -- "$WIN"; then
-  echo "Ya hay una ventana $TS:$WIN" >&2; exit 1
-fi
-if [[ -n "$ID" ]]; then
-  for f in "$HOME"/.claude/sessions/*.json; do
-    python3 -I -c "import json,os,sys;d=json.load(open(sys.argv[1]));os.kill(int(d['pid']),0);sys.exit(d['sessionId']!=sys.argv[2])" "$f" "$ID" 2>/dev/null \
-      && { echo "La conversación $ID ya está abierta (${f##*/}); ciérrala antes" >&2; exit 1; }
-  done
-  ls "$HOME"/.claude/projects/*/"$ID".jsonl >/dev/null 2>&1 || { echo "No existe la conversación $ID" >&2; exit 1; }
-  args=(--resume "$ID")
-else
-  args=()
-  if [[ -n "$PROMPT" ]]; then
-    [[ -f "$PROMPT" ]] || { echo "No existe $PROMPT" >&2; exit 1; }
-    args+=("$(cat -- "$PROMPT")")
-  fi
-fi
-# Ids de sesiones vivas con este nombre (cli). Las de antes de lanzar no son la nueva:
-# una sesión vieja con el mismo nombre puede seguir abierta durante una migración.
+
+# Ids de sesiones vivas con este nombre (cli); con --cwd, «id|carpeta». Las de antes de
+# lanzar no son la nueva: una sesión vieja con el mismo nombre puede seguir abierta
+# durante una migración.
 vivas() {
-  python3 -I - "$HOME/.claude/sessions" "$NOMBRE" <<'PY'
+  python3 -I - "$HOME/.claude/sessions" "$NOMBRE" "${1:-}" <<'PY'
 import json, os, sys, glob
 for f in glob.glob(os.path.join(sys.argv[1], '*.json')):
     try:
@@ -49,28 +30,100 @@ for f in glob.glob(os.path.join(sys.argv[1], '*.json')):
     except Exception:
         continue
     if d.get('name') == sys.argv[2] and d.get('entrypoint') == 'cli':
-        print(d['sessionId'])
+        print(d['sessionId'] + ('|' + d.get('cwd', '') if sys.argv[3] else ''))
 PY
 }
-PREVIAS=$(vivas)
-printf -v cmd 'cd -- %q && ' "$DIR"
-printf -v invocacion '%q ' "$CLAUDE" "${args[@]}" --remote-control "$NOMBRE" --name "$NOMBRE" --permission-mode auto
-cmd+="$invocacion; exec bash -l"
-if tmux has-session -t "$TS" 2>/dev/null; then
-  tmux new-window -d -t "$TS" -n "$WIN" bash -c "$cmd" 9>&-
-else
-  tmux new-session -d -s "$TS" -n "$WIN" -x 220 -y 50 bash -c "$cmd" 9>&-
+
+# Falla si Claude Code no tiene aceptada la confianza de la carpeta: sin ella la sesión
+# se queda en el diálogo y no se registra. Reglas de la doc oficial (permissions, workspace
+# trust): en un repo cuenta su raíz (la del checkout principal en un worktree); fuera de
+# un repo, la carpeta o un padre; en el propio home la confianza nunca se guarda.
+confiada() {
+  python3 -I - "$HOME" "$1" <<'PY'
+import json, os, subprocess, sys
+home, d = (os.path.realpath(x) for x in sys.argv[1:])
+try:
+    proyectos = json.load(open(os.path.join(home, '.claude.json'))).get('projects', {})
+except Exception:
+    sys.exit(0)  # sin datos no se puede saber: se lanza como siempre
+def aceptada(c):
+    return proyectos.get(c, {}).get('hasTrustDialogAccepted') is True
+r = subprocess.run(['git', '-C', d, 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+                   capture_output=True, text=True)
+if r.returncode == 0:
+    comun = os.path.realpath(r.stdout.strip())
+    sys.exit(0 if aceptada(os.path.dirname(comun) if os.path.basename(comun) == '.git' else comun) else 1)
+if d == home:
+    sys.exit(1)
+while not aceptada(d):
+    if os.path.dirname(d) == d:
+        sys.exit(1)
+    d = os.path.dirname(d)
+PY
+}
+
+if [[ -n "$REGISTRAR" ]]; then
+  VIVA=$(vivas --cwd | head -1)
+  [[ -n "$VIVA" ]] || { echo "No hay ninguna sesión viva llamada «$NOMBRE»" >&2; exit 1; }
+  ID="${VIVA%%|*}"; DIR="${VIVA#*|}"
+fi
+[[ -d "$DIR" ]] || { echo "No existe $DIR" >&2; exit 1; }
+[[ "$NOMBRE$DIR" != *$'\n'* && "$NOMBRE$DIR" != *'|'* ]] || exit 2
+WIN=$(printf %s "$NOMBRE" | tr -c 'A-Za-z0-9_.-' '-' | tr -s '-' | sed 's/^-//;s/-$//')
+mkdir -p "$HOME/.config/claude-arranque"
+exec 9>"$HOME/.config/claude-arranque/lanzar.lock"
+flock 9
+[[ -n "$WIN" ]] || { echo "Nombre de ventana vacío" >&2; exit 2; }
+printf -v REG '%q ' claude-nueva-sesion --registrar "$NOMBRE"
+if [[ -z "$REGISTRAR" ]]; then
+  CLAUDE=$(command -v claude) || { echo "No se encuentra claude en PATH" >&2; exit 1; }
+  if tmux list-windows -t "$TS" -F '#W' 2>/dev/null | grep -Fxq -- "$WIN"; then
+    echo "Ya hay una ventana $TS:$WIN" >&2; exit 1
+  fi
+  if [[ -n "$ID" ]]; then
+    for f in "$HOME"/.claude/sessions/*.json; do
+      python3 -I -c "import json,os,sys;d=json.load(open(sys.argv[1]));os.kill(int(d['pid']),0);sys.exit(d['sessionId']!=sys.argv[2])" "$f" "$ID" 2>/dev/null \
+        && { echo "La conversación $ID ya está abierta (${f##*/}); ciérrala antes" >&2; exit 1; }
+    done
+    ls "$HOME"/.claude/projects/*/"$ID".jsonl >/dev/null 2>&1 || { echo "No existe la conversación $ID" >&2; exit 1; }
+    args=(--resume "$ID")
+  else
+    args=()
+    if [[ -n "$PROMPT" ]]; then
+      [[ -f "$PROMPT" ]] || { echo "No existe $PROMPT" >&2; exit 1; }
+      args+=("$(cat -- "$PROMPT")")
+    fi
+  fi
+  PREVIAS=$(vivas)
+  CONFIADA=1; confiada "$DIR" || CONFIADA=""
+  printf -v cmd 'cd -- %q && ' "$DIR"
+  printf -v invocacion '%q ' "$CLAUDE" "${args[@]}" --remote-control "$NOMBRE" --name "$NOMBRE" --permission-mode auto
+  cmd+="$invocacion; exec bash -l"
+  if tmux has-session -t "$TS" 2>/dev/null; then
+    tmux new-window -d -t "$TS" -n "$WIN" bash -c "$cmd" 9>&-
+  else
+    tmux new-session -d -s "$TS" -n "$WIN" -x 220 -y 50 bash -c "$cmd" 9>&-
+  fi
+  if [[ -z "$CONFIADA" ]]; then
+    echo "Ventana $TS:$WIN abierta, pero Claude Code no tiene aceptada la carpeta $DIR y la sesión" >&2
+    echo "espera en el diálogo de confianza. Acéptalo tú (tmux attach -t $TS:$WIN; Ctrl-b d para salir)" >&2
+    echo "y apúntala en el arranque automático con: ${REG% }" >&2
+    exit 3
+  fi
+  # Espera a que Claude registre la sesión para apuntar su id.
+  ID=""
+  for _ in $(seq 30); do
+    sleep 2
+    ID=$(vivas | grep -Fxv -f <(printf '%s\n' "$PREVIAS") | head -1 || true)
+    [[ -n "$ID" ]] && break
+  done
+  if [[ -z "$ID" ]]; then
+    echo "Ventana $TS:$WIN abierta, pero no vi su id; no quedó en el arranque automático." >&2
+    echo "Mira qué espera (tmux attach -t $TS:$WIN) y, cuando arranque, apúntala con: ${REG% }" >&2
+    exit 1
+  fi
 fi
 mkdir -p "${CONF%/*}"
-# Espera a que Claude registre la sesión para apuntar su id.
-for _ in $(seq 30); do
-  sleep 2
-  ID=$(vivas | grep -Fxv -f <(printf '%s\n' "$PREVIAS") | head -1 || true)
-  [[ -n "$ID" ]] && break
-done
-if [[ -z "$ID" ]]; then
-  echo "Ventana $TS:$WIN abierta, pero no vi su id; no quedó en el arranque automático" >&2; exit 1
-fi
 # Sustituye la entrada de esta ventana o de este nombre en vez de acumular otra.
 NUEVO=$(mktemp "$CONF.XXXXXX")
 touch "$CONF"
