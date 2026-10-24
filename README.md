@@ -4,10 +4,19 @@ Reglas comunes para todas las sesiones de Claude Code de thealejandro, en cualqu
 
 Incluye:
 - `REGLAS.md`, inyectado al inicio de cada sesión (hook `SessionStart`).
-- Skill `commit`: commits convencionales en el idioma del repo, sin atribución, sin push a `main` sin permiso.
+- Skill `commit`: commits convencionales en el idioma del repo, sin atribución, sin push a `main` sin permiso. Corre en Haiku.
 - Hook `jev-router`: Jev elige modelo y effort de cada subagente; los `Plan` van con Fable.
 - Hook `anti-filtraciones`: bloquea commits y pushes con secretos, archivos sensibles o datos reales.
 - `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, confirmación para producción, autocompact 200K).
+
+## Plugins recomendados (midudev/better-claude)
+
+No se copian aquí: los mantiene midudev y se actualizan desde su marketplace. `commit@better-claude` no se instala porque la skill `commit` de este plugin lo sustituye.
+
+```bash
+claude plugin marketplace add midudev/better-claude
+for p in sub-meter token-meter context-meter image-preview time-machine narrator; do claude plugin install $p@better-claude; done
+```
 
 ## Hook `anti-filtraciones`
 
