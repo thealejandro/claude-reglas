@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import threading
+import time
 import unittest
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -46,6 +48,9 @@ class ServidorTest(unittest.TestCase):
         self.assertIn('ExecStop=/usr/local/bin/claude-guardar-abiertas', r.stdout)
         self.assertIn('systemctl --user enable --now', r.stdout)
         self.assertIn('instalar-actualizacion.sh prueba', r.stdout)
+        self.assertIn('claude-reiniciar-sesiones.timer', r.stdout)
+        self.assertIn('OnCalendar=*-*-* 04:45', r.stdout)
+        self.assertIn('ExecStart=/usr/local/bin/claude-reiniciar-sesiones --actualizar', r.stdout)
 
     def test_argumentos_invalidos(self):
         for args in ((), ('--simular',), ('--simular', 'prueba'),
@@ -88,7 +93,9 @@ class ServidorTest(unittest.TestCase):
     def test_argumentos_lanzadores(self):
         for nombre, args in (('claude-arranque', []), ('claude-nueva-sesion', []),
                              ('claude-nueva-sesion', ['--retomar']),
-                             ('claude-nueva-sesion', ['', str(self.home)])):
+                             ('claude-nueva-sesion', ['', str(self.home)]),
+                             ('claude-reiniciar-sesiones', ['--loquesea']),
+                             ('claude-reiniciar-sesiones', ['--quietud', 'mucho'])):
             r = self.ejecutar(RAIZ / 'scripts/servidor' / nombre, *args)
             self.assertEqual(r.returncode, 2, r.stderr)
             self.assertNotIn('CLI PROHIBIDO', r.stderr)
@@ -213,6 +220,142 @@ class ServidorTest(unittest.TestCase):
         r = self.ejecutar(RAIZ / 'scripts/servidor/claude-nueva-sesion', '--registrar', 'Otra')
         self.assertEqual(r.returncode, 1)
         self.assertIn('No hay ninguna sesión viva', r.stderr)
+
+    ID = '0123abcd-0123-4abc-8def-0123456789ab'
+    REINICIAR = RAIZ / 'scripts/servidor/claude-reiniciar-sesiones'
+
+    def entorno_reinicio(self, instalada='2.0.5 (Claude Code)', ventanas='@5|Proyecto', display='0|0|@5'):
+        """CLIs falsos para el reinicio: tmux y claude solo registran llamadas."""
+        self.env.update(REINICIAR_ESPERA_SALIDA='1', REINICIAR_ESPERA_TERM='1',
+                        REINICIAR_ESPERA_RETOMA='1', REINICIAR_PAUSA='0')
+        self.ejecutable('curl', '#!/bin/bash\nexit 0\n')
+        self.ejecutable('claude', f'#!/bin/bash\necho "claude $*" >> "$HOME/claude.log"\n'
+                        f'[[ $1 == --version ]] && echo "{instalada}"\nexit 0\n')
+        self.ejecutable('tmux', f"""#!/bin/bash
+printf '%s\\n' "$*" >> "$HOME/tmux.log"
+case $1 in
+  display-message) echo '{display}' ;;
+  list-windows) [[ -e "$HOME/cerrada" ]] && exit 0
+    case "$*" in *window_id*) printf '%s\\n' '{ventanas}' ;; *) echo Proyecto ;; esac ;;
+  has-session) exit 0 ;;
+  send-keys) [[ -e "$HOME/pid" ]] && kill "$(cat "$HOME/pid")" ;;
+  kill-window) touch "$HOME/cerrada" ;;
+  new-window|new-session) cp "$HOME/nueva.json" "$HOME/.claude/sessions/nueva.json" ;;
+esac
+exit 0
+""")
+
+    def proceso(self, orden=('sleep', '1000')):
+        p = subprocess.Popen(list(orden))
+        self.addCleanup(p.kill)
+        threading.Thread(target=p.wait, daemon=True).start()  # sin zombis: kill -0 los vería vivos
+        (self.home / 'pid').write_text(str(p.pid))
+        return p
+
+    def sesion(self, nombre, pid, **extra):
+        """Escribe el json de una sesión con transcript antiguo; por defecto es candidata."""
+        carpeta = self.home / '.claude/sessions'
+        proyectos = self.home / '.claude/projects/p'
+        carpeta.mkdir(parents=True, exist_ok=True)
+        proyectos.mkdir(parents=True, exist_ok=True)
+        antes = time.time() - 3600
+        datos = dict(pid=pid, sessionId=self.ID, kind='interactive', entrypoint='cli', version='2.0.1',
+                     status='idle', statusUpdatedAt=int(antes * 1000), tmux='sesiones:@5.%9',
+                     name='Proyecto (equipo)', cwd=str(self.home))
+        datos.update(extra)
+        (carpeta / f'{nombre}.json').write_text(json.dumps(datos))
+        transcript = proyectos / f"{datos['sessionId']}.jsonl"
+        transcript.write_text('{}\n')
+        os.utime(transcript, (antes, antes))
+        return datos
+
+    def test_reiniciar_simula_sin_tocar_nada(self):
+        self.entorno_reinicio()
+        pid = self.proceso().pid
+        self.sesion('valida', pid)
+        self.sesion('ocupada', pid, status='busy', sessionId='a' * 36)
+        self.sesion('reciente', pid, statusUpdatedAt=int(time.time() * 1000), sessionId='b' * 36)
+        self.sesion('igual', pid, version='2.0.5', sessionId='c' * 36)
+        self.sesion('app', pid, entrypoint='sdk-cli', sessionId='d' * 36)
+        self.sesion('sin-tmux', pid, tmux=None, sessionId='e' * 36)
+        self.sesion('otra-tmux', pid, tmux='otra:@5.%9', sessionId='f' * 36)
+        self.sesion('transcript-reciente', pid, sessionId='1' * 36)
+        os.utime(self.home / ('.claude/projects/p/' + '1' * 36 + '.jsonl'))
+        self.sesion('muerta', 999999999, sessionId='2' * 36)
+        (self.home / '.claude/sessions/corrupta.json').write_text('{no es json')
+        r = self.ejecutar(self.REINICIAR, '--simular')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.count('reiniciaría'), 1, r.stdout)
+        self.assertIn(f'reiniciaría «Proyecto (equipo)» ({self.ID}) de 2.0.1 a 2.0.5', r.stdout)
+        self.assertEqual(r.stdout.count('omito'), 9, r.stdout)
+        llamadas = (self.home / 'tmux.log').read_text()
+        self.assertNotIn('send-keys', llamadas)
+        self.assertNotIn('kill-window', llamadas)
+        self.assertFalse((self.home / '.local/state/claude-reiniciar').exists())
+        self.assertNotIn('update', (self.home / 'claude.log').read_text())
+
+    def test_reiniciar_marca_cierra_y_retoma(self):
+        self.entorno_reinicio()
+        pid = self.proceso().pid
+        datos = self.sesion('vieja', pid)
+        (self.home / 'nueva.json').write_text(json.dumps(dict(datos, pid=os.getpid(), version='2.0.5')))
+        r = self.ejecutar(self.REINICIAR)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        llamadas = (self.home / 'tmux.log').read_text().splitlines()
+        orden = [next(i for i, l in enumerate(llamadas) if l.startswith(p) or p in l)
+                 for p in ('send-keys -t %9 /exit Enter', 'kill-window -t @5', f'--resume {self.ID}')]
+        self.assertEqual(orden, sorted(orden))
+        marca = json.loads((self.home / f'.local/state/claude-reiniciar/{self.ID}.json').read_text())
+        self.assertEqual((marca['de'], marca['a'], marca['nombre']), ('2.0.1', '2.0.5', 'Proyecto (equipo)'))
+        self.assertIn('retomada «Proyecto (equipo)»', (self.home / '.local/state/claude-reiniciar.log').read_text())
+        self.assertFalse(list((self.home / '.config/claude-arranque').glob('reiniciar.conf.*')))
+
+    def test_reiniciar_usa_sigterm_y_sigkill_si_no_sale(self):
+        self.entorno_reinicio()
+        self.ejecutable('tmux', '#!/bin/bash\n[[ $1 == display-message ]] && echo "0|0|@5"\n'
+                        '[[ $1 == list-windows && "$*" == *window_id* ]] && echo "@5|Proyecto"\n'
+                        '[[ $1 == has-session ]] && exit 1\n'
+                        'printf "%s\\n" "$*" >> "$HOME/tmux.log"\nexit 0\n')
+        for nombre, orden, esperado in (
+                ('term', ('sleep', '1000'), 'SIGTERM'),
+                ('kill', ('bash', '-c', 'trap "" TERM; while :; do sleep 1; done'), 'SIGKILL')):
+            with self.subTest(nombre):
+                p = self.proceso(orden)
+                time.sleep(0.3)
+                self.sesion('vieja', p.pid)
+                r = self.ejecutar(self.REINICIAR)
+                self.assertEqual(r.returncode, 1, r.stdout)  # sin retoma real: FALLO
+                self.assertIn(esperado, r.stdout)
+                self.assertIn(f'FALLO «Proyecto (equipo)» ({self.ID})', r.stdout)
+                self.assertIn(f'claude-nueva-sesion --retomar {self.ID}', r.stdout)
+                self.assertIn('kill-window', (self.home / 'tmux.log').read_text())
+
+    def test_reiniciar_omite_con_cliente_adjunto_o_ventana_homonima(self):
+        for display, ventanas in (('1|1|@5', '@5|Proyecto'), ('0|0|@5', '@5|Proyecto-equipo\n@9|Proyecto-equipo')):
+            with self.subTest(display=display):
+                self.entorno_reinicio(display=display, ventanas=ventanas)
+                self.sesion('vieja', self.proceso().pid)
+                (self.home / 'tmux.log').unlink(missing_ok=True)
+                r = self.ejecutar(self.REINICIAR)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                self.assertIn('omito «Proyecto (equipo)»', r.stdout)
+                self.assertNotIn('send-keys', (self.home / 'tmux.log').read_text())
+
+    def test_reiniciar_aborta_con_version_rara(self):
+        self.entorno_reinicio(instalada='rara')
+        self.sesion('vieja', self.proceso().pid)
+        r = self.ejecutar(self.REINICIAR)
+        self.assertEqual(r.returncode, 1)
+        self.assertFalse((self.home / 'tmux.log').exists())
+
+    def test_reiniciar_actualiza_y_sigue_si_falla(self):
+        self.entorno_reinicio()
+        self.ejecutable('claude', '#!/bin/bash\necho "claude $*" >> "$HOME/claude.log"\n'
+                        '[[ $1 == update ]] && exit 1\n[[ $1 == --version ]] && echo "2.0.5"\nexit 0\n')
+        r = self.ejecutar(self.REINICIAR, '--actualizar')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('claude update falló', r.stdout)
+        self.assertIn('claude update', (self.home / 'claude.log').read_text())
 
 
 if __name__ == '__main__':

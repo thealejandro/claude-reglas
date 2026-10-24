@@ -1,0 +1,269 @@
+#!/bin/bash
+# Uso: claude-reiniciar-sesiones [--simular] [--actualizar] [--quietud MIN] [--sesion-tmux sesiones]
+# Reinicia las sesiones de Claude en tmux que llevan una versión anterior a la instalada y están
+# quietas (idle y sin actividad hace MIN minutos, 30 por defecto): /exit, cierra la ventana y las
+# retoma con claude-arranque. Nunca toca las abiertas desde la app (sdk-cli) ni las que alguien
+# tiene a la vista en tmux. Ante cualquier duda sobre el formato de ~/.claude/sessions no reinicia.
+# --actualizar ejecuta antes «claude update» (lo pasa la unidad); --simular solo informa.
+set -eu
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+TS=sesiones; QUIETUD=30; SIMULAR=""; ACTUALIZAR=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --simular) SIMULAR=1; shift ;;
+    --actualizar) ACTUALIZAR=1; shift ;;
+    --quietud) [[ $# -ge 2 && "$2" =~ ^[0-9]+$ ]] || { echo "Uso: --quietud <minutos>" >&2; exit 2; }; QUIETUD="$2"; shift 2 ;;
+    --sesion-tmux) [[ $# -ge 2 && "$2" =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "Uso: --sesion-tmux <nombre>" >&2; exit 2; }; TS="$2"; shift 2 ;;
+    *) echo "Uso: claude-reiniciar-sesiones [--simular] [--actualizar] [--quietud MIN] [--sesion-tmux sesiones]" >&2; exit 2 ;;
+  esac
+done
+ESPERA_SALIDA="${REINICIAR_ESPERA_SALIDA:-30}"; ESPERA_TERM="${REINICIAR_ESPERA_TERM:-20}"
+ESPERA_RETOMA="${REINICIAR_ESPERA_RETOMA:-60}"; PAUSA="${REINICIAR_PAUSA:-10}"
+AQUI="${BASH_SOURCE[0]%/*}"
+hermano() { if [[ -x "$AQUI/$1" ]]; then echo "$AQUI/$1"; else command -v "$1" || true; fi; }
+ARRANQUE=$(hermano claude-arranque)
+LOG="$HOME/.local/state/claude-reiniciar.log"; MARCAS="$HOME/.local/state/claude-reiniciar"
+CONFIG="$HOME/.config/claude-arranque"
+mkdir -p "${LOG%/*}" "$CONFIG"
+log() { local l; l="$(date '+%F %T') $*"; echo "$l" >> "$LOG"; echo "$l"; }
+[[ -n "$ARRANQUE" ]] || { log "ERROR no encuentro claude-arranque"; exit 1; }
+exec 8>"$CONFIG/reiniciar.lock"
+flock -n 8 || { log "ya hay otro reinicio en curso; salgo"; exit 0; }
+
+PENDIENTE=""; TMP=""; FALLOS=0
+# Si muere con una sesión cerrada y sin relanzar, intenta devolverla antes de salir.
+al_salir() {
+  local codigo=$?
+  trap - EXIT
+  if [[ -n "$PENDIENTE" && -s "$PENDIENTE" ]]; then
+    log "salida inesperada con una sesión cerrada; intento relanzarla"
+    env ABIERTAS=/dev/null "$ARRANQUE" "$TS" "$PENDIENTE" auto 8>&- >> "$LOG" 2>&1 || true
+  fi
+  [[ -z "$TMP" ]] || rm -f -- "$TMP"
+  exit "$codigo"
+}
+trap al_salir EXIT
+trap 'exit 143' TERM INT HUP
+
+if [[ -n "$ACTUALIZAR" && -z "$SIMULAR" ]]; then
+  log "claude update"
+  timeout 5m claude update >> "$LOG" 2>&1 || log "claude update falló (código $?); sigo con lo instalado"
+fi
+
+INSTALADA=$(claude --version 2>/dev/null | awk '{print $1; exit}') || true
+if ! [[ "$INSTALADA" =~ ^[0-9]+(\.[0-9]+)+$ ]]; then
+  log "ERROR versión instalada ilegible («${INSTALADA:-vacía}»); no reinicio nada"
+  exit 1
+fi
+if [[ -z "$SIMULAR" ]]; then
+  GUARDAR=$(hermano claude-guardar-abiertas)
+  [[ -z "$GUARDAR" ]] || "$GUARDAR" 8>&- >> "$LOG" 2>&1 || log "claude-guardar-abiertas falló; sigo"
+fi
+
+candidatas() {
+  python3 -I - "$HOME/.claude/sessions" "$TS" "$INSTALADA" "$QUIETUD" <<'PY'
+import glob, json, os, re, sys, time
+carpeta, ts, instalada, quietud = sys.argv[1:5]
+quietud = int(quietud) * 60
+inst = tuple(int(x) for x in instalada.split('.'))
+ahora = time.time()
+tmux_re = re.compile('^' + re.escape(ts) + r':@(\d+)\.%(\d+)$')
+ancestros, p = set(), os.getpid()
+while p > 1 and p not in ancestros:
+    ancestros.add(p)
+    try:
+        p = next(int(l.split()[1]) for l in open(f'/proc/{p}/status') if l.startswith('PPid:'))
+    except Exception:
+        break
+
+def revisar(d):
+    """Devuelve (candidata, campos) o (None, motivo)."""
+    if d.get('kind') != 'interactive' or d.get('entrypoint') != 'cli':
+        return None, 'no es una sesión interactiva de terminal'
+    pid = d['pid']
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid < 2:
+        return None, 'pid no válido'
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return None, 'el proceso ya no existe'
+    if pid in ancestros:
+        return None, 'es la sesión que ejecuta esto'
+    sid = d['sessionId']
+    if not isinstance(sid, str) or not re.fullmatch('[0-9a-f-]{36}', sid):
+        return None, 'sessionId no válido'
+    m = tmux_re.match(d['tmux']) if isinstance(d.get('tmux'), str) else None
+    if not m:
+        return None, f'no corre en tmux {ts}'
+    v = d['version']
+    if not isinstance(v, str) or not re.fullmatch(r'[0-9]+(\.[0-9]+)+', v):
+        return None, 'versión no legible'
+    if tuple(int(x) for x in v.split('.')) >= inst:
+        return None, 'ya tiene la versión instalada'
+    ms = d['statusUpdatedAt']
+    if d['status'] != 'idle':
+        return None, 'no está quieta (' + str(d['status']) + ')'
+    if not isinstance(ms, (int, float)) or isinstance(ms, bool) or ahora - ms / 1000 < quietud:
+        return None, 'actividad reciente'
+    marcas = []
+    for t in glob.glob(os.path.join(os.path.dirname(carpeta), 'projects', '*', sid + '.jsonl')):
+        marcas.append((os.stat(t).st_mtime, os.stat(t).st_size))
+    if not marcas:
+        return None, 'sin conversación guardada'
+    mtime, tam = max(marcas)
+    if tam <= 0:
+        return None, 'conversación vacía'
+    if ahora - mtime < quietud:
+        return None, 'conversación modificada hace poco'
+    nombre, cwd = d['name'], d['cwd']
+    if not isinstance(nombre, str) or not nombre.strip() or re.search(r'[|\x00-\x1f]', nombre):
+        return None, 'nombre no válido'
+    if not isinstance(cwd, str) or not os.path.isabs(cwd) or re.search(r'[|\x00-\x1f]', cwd) or not os.path.isdir(cwd):
+        return None, 'carpeta no válida'
+    return True, (pid, sid, v, '@' + m[1], '%' + m[2], nombre, cwd)
+
+for f in sorted(glob.glob(os.path.join(carpeta, '*.json'))):
+    try:
+        ok, r = revisar(json.load(open(f)))
+    except Exception:
+        ok, r = None, 'ilegible o con campos inesperados'
+    if ok:
+        print('candidata|' + '|'.join(str(x) for x in r))
+    else:
+        print(f'omitida|{os.path.basename(f)}|{r}')
+PY
+}
+
+nombre_ventana() { printf %s "$1" | tr -c 'A-Za-z0-9_.-' '-' | tr -s '-' | sed 's/^-//;s/-$//'; }
+vivo() { kill -0 "$1" 2>/dev/null && ! grep -q '^State:[[:space:]]*Z' "/proc/$1/status" 2>/dev/null; }
+
+# Imprime el motivo si no se debe tocar la ventana ahora mismo (nada si se puede).
+motivo_tmux() {  # @win %pane ventana-derivada
+  local info ac sa wid l
+  info=$(tmux display-message -p -t "$2" '#{window_active_clients}|#{session_attached}|#{window_id}' 2>/dev/null) \
+    || { echo "tmux no responde sobre $2"; return 0; }
+  IFS='|' read -r ac sa wid <<< "$info"
+  [[ "$wid" == "$1" ]] || { echo "el panel $2 no está en la ventana $1"; return 0; }
+  if [[ "$ac" =~ ^[0-9]+$ ]]; then
+    (( ac == 0 )) || { echo "alguien tiene la ventana a la vista"; return 0; }
+  elif ! [[ "$sa" =~ ^[0-9]+$ ]] || (( sa > 0 )); then
+    echo "hay un cliente adjunto a la sesión tmux"; return 0
+  fi
+  while IFS= read -r l; do
+    if [[ "${l#*|}" == "$3" && "${l%%|*}" != "$1" ]]; then echo "ya existe otra ventana llamada $3"; return 0; fi
+  done < <(tmux list-windows -t "$TS" -F '#{window_id}|#W' 2>/dev/null || true)
+}
+
+esperar_muerte() {  # pid segundos
+  local i
+  for ((i = 0; i < $2; i++)); do vivo "$1" || return 0; sleep 1; done
+  ! vivo "$1"
+}
+
+retomada() {
+  python3 -I - "$HOME/.claude/sessions" "$1" <<'PY'
+import glob, json, os, sys
+for f in glob.glob(os.path.join(sys.argv[1], '*.json')):
+    try:
+        d = json.load(open(f))
+        if d['sessionId'] == sys.argv[2]:
+            os.kill(int(d['pid']), 0)
+            sys.exit(0)
+    except Exception:
+        pass
+sys.exit(1)
+PY
+}
+
+esperar_retoma() {
+  local i
+  for ((i = 0; i <= ESPERA_RETOMA; i++)); do
+    retomada "$1" && return 0
+    (( i == ESPERA_RETOMA )) || sleep 1
+  done
+  return 1
+}
+
+lanzar() { env ABIERTAS=/dev/null "$ARRANQUE" "$TS" "$1" auto 8>&- >> "$LOG" 2>&1 || true; }
+
+reiniciar() {  # pid id version win pane nombre dir ventana-derivada
+  local pid="$1" id="$2" version="$3" win="$4" pane="$5" nombre="$6" dir="$7" vwin="$8"
+  mkdir -p "$MARCAS"
+  python3 -I - "$MARCAS/$id.json" "$version" "$INSTALADA" "$nombre" <<'PY'
+import json, sys, time
+ruta, de, a, nombre = sys.argv[1:5]
+json.dump({'de': de, 'a': a, 'fecha': time.strftime('%Y-%m-%d %H:%M'), 'nombre': nombre}, open(ruta, 'w'), ensure_ascii=False)
+PY
+  TMP=$(mktemp "$CONFIG/reiniciar.conf.XXXXXX")
+  printf '%s|%s|%s|%s\n' "$vwin" "$id" "$nombre" "$dir" > "$TMP"
+  PENDIENTE="$TMP"
+  log "cierro «$nombre» ($id, pid $pid) con /exit"
+  # C-c vacía un borrador a medio escribir: si no, «/exit» se le pegaría y se enviaría como mensaje.
+  tmux send-keys -t "$pane" C-c 8>&- || true
+  sleep 1
+  tmux send-keys -t "$pane" '/exit' Enter 8>&- || true
+  if ! esperar_muerte "$pid" "$ESPERA_SALIDA"; then
+    log "«$nombre» no salió con /exit; envío SIGTERM"
+    kill -TERM "$pid" 2>/dev/null || true
+    esperar_muerte "$pid" "$ESPERA_TERM" || true
+  fi
+  tmux kill-window -t "$win" 8>&- || true
+  if vivo "$pid"; then
+    log "SIGKILL A «$nombre» (pid $pid): no salió ni con SIGTERM"
+    kill -KILL "$pid" 2>/dev/null || true
+    sleep 1
+  fi
+  lanzar "$TMP"
+  if ! esperar_retoma "$id"; then
+    log "«$nombre» no aparece tras retomarla; reintento"
+    lanzar "$TMP"
+  fi
+  if esperar_retoma "$id"; then
+    log "retomada «$nombre» ($id) de $version a $INSTALADA"
+  else
+    log "FALLO «$nombre» ($id) no volvió; retómala con: claude-nueva-sesion --retomar $id \"$nombre\" $dir"
+    FALLOS=$((FALLOS + 1))
+  fi
+  PENDIENTE=""; rm -f -- "$TMP"; TMP=""
+}
+
+mapfile -t LINEAS < <(candidatas)
+primera=1; total=0
+for linea in "${LINEAS[@]}"; do
+  IFS='|' read -r tipo pid id version win pane nombre dir <<< "$linea"
+  if [[ "$tipo" == omitida ]]; then
+    if [[ -n "$SIMULAR" ]]; then echo "omito $pid: $id"; fi
+    continue
+  fi
+  vwin=$(nombre_ventana "$nombre")
+  motivo=""
+  if [[ -z "$vwin" ]]; then motivo="nombre sin caracteres para la ventana"; else motivo=$(motivo_tmux "$win" "$pane" "$vwin"); fi
+  if [[ -n "$motivo" ]]; then
+    log "omito «$nombre» ($id): $motivo"
+    continue
+  fi
+  total=$((total + 1))
+  if [[ -n "$SIMULAR" ]]; then
+    echo "reiniciaría «$nombre» ($id) de $version a $INSTALADA"
+    continue
+  fi
+  if [[ -z "$primera" ]]; then
+    (( PAUSA <= 0 )) || sleep "$PAUSA"
+    # La lista es de antes del reinicio anterior: comprueba que sigue quieta (pudo usarse desde la app).
+    if ! candidatas | grep -Fxq -- "$linea" || [[ -n "$(motivo_tmux "$win" "$pane" "$vwin")" ]]; then
+      log "omito «$nombre» ($id): cambió desde la revisión"
+      continue
+    fi
+  fi
+  primera=""
+  reiniciar "$pid" "$id" "$version" "$win" "$pane" "$nombre" "$dir" "$vwin"
+done
+
+if [[ -n "$SIMULAR" ]]; then
+  log "simulación: $total sesión(es) por reiniciar a $INSTALADA"
+  exit 0
+fi
+[[ ! -d "$MARCAS" ]] || find "$MARCAS" -maxdepth 1 -name '*.json' -mtime +7 -delete
+tail -n 500 "$LOG" > "$LOG.tmp" && mv -f -- "$LOG.tmp" "$LOG"
+(( FALLOS == 0 )) || exit 1
+exit 0

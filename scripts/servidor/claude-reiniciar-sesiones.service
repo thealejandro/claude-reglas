@@ -1,0 +1,9 @@
+[Unit]
+Description=Reinicia de madrugada las sesiones de Claude quietas con versión antigua
+[Service]
+Environment="PATH=@PATH@"
+Type=oneshot
+TimeoutStartSec=30min
+# Si hubo que crear el servidor tmux aquí, que sobreviva al terminar la unidad.
+KillMode=process
+ExecStart=/usr/local/bin/claude-reiniciar-sesiones --actualizar
