@@ -86,6 +86,8 @@ systemctl --user enable --now claude-rc.service claude-sesiones.service claude-g
 COMO_USUARIO
 bash "$RAIZ/instalar-actualizacion.sh" "$U"
 echo "Módulo de servidor instalado para $U ($EQUIPO)"
-# La confianza de una carpeta cubre sus subcarpetas; la del home nunca se guarda.
-echo "Último paso, una sola vez como $U: cd ~/work && claude, acepta la carpeta y sal con /exit."
-echo "Así las sesiones dentro de ~/work arrancan solas tras un reinicio sin pedir confianza."
+# La confianza de una carpeta cubre sus subcarpetas, pero no los repos git de dentro:
+# cada repo pide la suya (por su raíz). La del home nunca se guarda.
+echo "Último paso, como $U: cd ~/work && claude, acepta la carpeta y sal con /exit."
+echo "Cada repo git de ~/work pide además su propia confianza la primera vez; claude-nueva-sesion"
+echo "lo detecta y da el tmux attach para aceptarla."
