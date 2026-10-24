@@ -1,0 +1,6 @@
+[Unit]
+Description=Reinicia cada noche las sesiones de Claude quietas con versión antigua
+[Timer]
+OnCalendar=*-*-* 04:45
+[Install]
+WantedBy=timers.target
