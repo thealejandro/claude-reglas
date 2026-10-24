@@ -5,6 +5,7 @@ Reglas comunes para todas las sesiones de Claude Code de thealejandro, en cualqu
 Incluye:
 - `REGLAS.md`, inyectado al inicio de cada sesión (hook `SessionStart`).
 - Skill `commit`: commits convencionales en el idioma del repo, sin atribución, sin push a `main` sin permiso. Corre en Haiku.
+- Skill `desplegar`: resumen de producción como comentario en la PR, aviso a la sesión del servidor y despliegue solo con el OK del usuario.
 - Hook `jev-router`: Jev elige modelo y effort de cada subagente; los `Plan` van con Fable.
 - Hook `anti-filtraciones`: bloquea commits y pushes con secretos, archivos sensibles o datos reales.
 - `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, confirmación para producción, autocompact 200K).
