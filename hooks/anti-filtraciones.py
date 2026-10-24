@@ -64,7 +64,9 @@ def run(command, cwd, deadline):
 
 
 def git_command(subcommand, *args):
-    return ["git", "--no-pager", "-c", "core.quotePath=false", subcommand, *args]
+    # Prefijos a/ b/ fijos: diff.mnemonicPrefix o diff.noprefix del usuario rompen header_path.
+    return ["git", "--no-pager", "-c", "core.quotePath=false", "-c", "diff.mnemonicPrefix=false",
+            "-c", "diff.noprefix=false", subcommand, *args]
 
 
 def repository_root(cwd, deadline):

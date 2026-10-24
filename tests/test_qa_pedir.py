@@ -10,6 +10,8 @@ import unittest
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/qa-pedir'
 
 
+# qa-pedir solo existe en el servidor de desarrollo (usuario dev).
+@unittest.skipUnless(Path('/home/dev').is_dir(), 'solo en el servidor (/home/dev)')
 class QaPedirTests(unittest.TestCase):
     def setUp(self):
         self.temporal = tempfile.TemporaryDirectory()
