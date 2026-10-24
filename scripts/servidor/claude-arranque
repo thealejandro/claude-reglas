@@ -27,13 +27,20 @@ for f in glob.glob(os.path.join(sys.argv[1], '*.json')):
         pass
 PY
 ) "
+ventanas=$'\n'"$(tmux list-windows -t "$TS" -F '#W' 2>/dev/null || true)"$'\n'
 n=0
 while IFS='|' read -r win id nombre dir; do
   [[ -z "$win" || "$win" == \#* || -z "${id:-}" ]] && continue
   [[ "$vistos" == *" $id "* ]] && continue
-  vistos+="$id "; n=$((n+1)); [[ $n -gt $MAX ]] && break
-  [[ -d "${dir:-}" ]] || dir="$HOME/work"; [[ -d "$dir" ]] || dir="$HOME"
+  vistos+="$id "
   win=$(printf %s "${nombre:-$win}" | tr -c 'A-Za-z0-9_.-' '-' | tr -s '-' | sed 's/^-//;s/-$//')
+  # Una ventana con ese nombre ya existe (p. ej. con un id viejo en el .conf): no la dupliques.
+  if [[ "$ventanas" == *$'\n'"$win"$'\n'* ]]; then
+    echo "$(date '+%F %T') omito «$nombre» ($id): ya existe la ventana $TS:$win" >> "$LOG"
+    continue
+  fi
+  ventanas+="$win"$'\n'; n=$((n+1)); [[ $n -gt $MAX ]] && break
+  [[ -d "${dir:-}" ]] || dir="$HOME/work"; [[ -d "$dir" ]] || dir="$HOME"
   printf -v cmd 'cd -- %q && %q --resume %q --remote-control %q --name %q --permission-mode %q; exec bash -l' "$dir" "$CLAUDE" "$id" "$nombre" "$nombre" "$MODO"
   echo "$(date '+%F %T') levanto «$nombre» ($id) en $TS:$win" >> "$LOG"
   if tmux has-session -t "$TS" 2>/dev/null; then

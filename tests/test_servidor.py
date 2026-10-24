@@ -95,7 +95,8 @@ class ServidorTest(unittest.TestCase):
 
     def test_arranque_no_duplica_vivas_ni_ids_repetidos(self):
         self.ejecutable('curl', '#!/bin/bash\nexit 0\n')
-        self.ejecutable('tmux', '#!/bin/bash\n[[ $1 == has-session ]] && exit 1\nprintf "%s\\n" "$*" >> "$HOME/tmux.log"\n')
+        self.ejecutable('tmux', '#!/bin/bash\n[[ $1 == has-session || $1 == list-windows ]] && exit 1\n'
+                        'printf "%s\\n" "$*" >> "$HOME/tmux.log"\n')
         sesiones = self.home / '.claude/sessions'
         sesiones.mkdir(parents=True)
         (sesiones / 'viva.json').write_text(json.dumps(dict(
@@ -108,6 +109,20 @@ class ServidorTest(unittest.TestCase):
         self.assertEqual(len(llamadas), 1)
         self.assertIn('--resume caida', llamadas[0])
         self.assertNotIn('--resume viva', llamadas[0])
+
+    def test_arranque_no_duplica_ventanas_con_el_mismo_nombre(self):
+        self.ejecutable('curl', '#!/bin/bash\nexit 0\n')
+        # Ya hay una ventana «Ocupada»; la sesión tmux existe.
+        self.ejecutable('tmux', '#!/bin/bash\n[[ $1 == has-session ]] && exit 0\n'
+                        '[[ $1 == list-windows ]] && { echo Ocupada; exit 0; }\n'
+                        'printf "%s\\n" "$*" >> "$HOME/tmux.log"\n')
+        conf = self.home / 'fijas.conf'
+        conf.write_text(f'o|vieja|Ocupada|{self.home}\nl|libre|Libre|{self.home}\nd|otra|Libre|{self.home}\n')
+        r = self.ejecutar(RAIZ / 'scripts/servidor/claude-arranque', 'sesiones', str(conf))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        llamadas = (self.home / 'tmux.log').read_text().splitlines()
+        self.assertEqual(len(llamadas), 1)
+        self.assertIn('--resume libre', llamadas[0])
 
     def test_guardar_omite_app_muertas_y_sin_conversacion(self):
         sesiones = self.home / '.claude/sessions'
