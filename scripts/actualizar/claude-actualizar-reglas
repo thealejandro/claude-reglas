@@ -13,5 +13,29 @@ mkdir -p "${LOG%/*}"
   claude plugin update reglas@thealejandro
   RAIZ=$(ls -d "$HOME"/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)
   python3 -I "${RAIZ}scripts/ajustes.py"
+  # Como root, renueva los lanzadores de /usr/local/bin que ya estén instalados y hayan cambiado
+  # (#45). No instala los que falten ni toca unidades: eso sigue siendo cosa de los instaladores.
+  DESTINO="${REGLAS_DESTINO_LANZADORES:-}"
+  [[ -n "$DESTINO" || $(id -u) != 0 ]] || DESTINO=/usr/local/bin
+  if [[ -n "$DESTINO" ]]; then
+    for SRC in "${RAIZ}"scripts/servidor/* "${RAIZ}scripts/agente-lanzar" "${RAIZ}scripts/qa-pedir" \
+               "${RAIZ}scripts/actualizar/claude-actualizar-reglas"; do
+      B=${SRC##*/}
+      [[ -f "$SRC" && $B != *.* ]] || continue
+      if [[ ! -e "$DESTINO/$B" ]]; then
+        [[ $SRC != */servidor/* || ! -e "$DESTINO/claude-arranque" ]] \
+          || echo "AVISO: el módulo de servidor trae $B y no está instalado; reinstálalo con instalar-servidor.sh"
+        continue
+      fi
+      cmp -s "$SRC" "$DESTINO/$B" && continue
+      # Solo desde una caché propia y no escribible por otros: es lo que ejecutarán las sesiones.
+      if [[ $(stat -c %u "$SRC") != $(id -u) || -n $(find "$SRC" -perm /022) ]]; then
+        echo "AVISO: no renuevo $B: $SRC no es solo de $(id -un)"; continue
+      fi
+      # Archivo nuevo y mv: un bash que esté ejecutando el viejo (este mismo) no lo ve cambiar.
+      install -m 755 "$SRC" "$DESTINO/.$B.nuevo" && mv -f -- "$DESTINO/.$B.nuevo" "$DESTINO/$B" \
+        && echo "renovado $DESTINO/$B" || echo "AVISO: no pude renovar $DESTINO/$B"
+    done
+  fi
 } >> "$LOG" 2>&1
 tail -n 200 "$LOG" > "$LOG.tmp" && mv -f -- "$LOG.tmp" "$LOG"
