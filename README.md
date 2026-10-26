@@ -8,7 +8,7 @@ Incluye:
 - Skill `desplegar`: resumen de producción como comentario en la PR, aviso a la sesión del servidor y despliegue solo con el OK del usuario.
 - Hook `jev-router`: Jev elige modelo y effort de cada subagente; los `Plan` van con Fable.
 - Hook `anti-filtraciones`: bloquea commits y pushes con secretos, archivos sensibles o datos reales.
-- `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, también sin enlace de sesión, confirmación para producción, autocompact 200K).
+- `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, también sin enlace de sesión, confirmación para producción, autocompact 200K), el `AGENTS.md` de Codex, Kimi y Cursor y los hooks de git globales.
 
 ## Configuración
 
@@ -53,6 +53,8 @@ Hay dos formas de declarar una excepción:
 
 - Añadir `reglas:permitir` como comentario en la misma línea.
 - Listar la ruta o patrón en `.reglas-permitir`, en la raíz del repositorio, con una entrada por línea.
+
+Los mismos controles corren como hooks de git para cualquier agente (ver «Reglas y hooks para Codex, Kimi y Cursor»).
 
 Si `gitleaks` está instalado se ejecuta como revisión adicional; si no, basta la revisión propia. El hook tiene un límite interno total de 5 segundos y, ante un fallo propio, deja continuar la operación con un aviso en lugar de bloquear por error.
 
@@ -111,6 +113,26 @@ Chrome del sistema para PDF (Browsershot) y QA, como root: `bash "$(ls -d ~usuar
 
 Un solo navegador compartido. En un servidor nuevo, como root: `bash "$(ls -d ~dev/.claude/plugins/cache/thealejandro/reglas/*/ | sort -V | tail -1)scripts/instalar-navegador.sh" dev` (librerías de Chromium, `xvfb`, fuentes, Chromium de Playwright y `chrome-devtools-mcp`; sin él se usa `npx`). `ajustes.py` crea `~/.local/bin/chromium-qa`, que arranca el Chromium de Playwright más reciente (sigue funcionando tras actualizar Playwright), y registra Chrome DevTools MCP (`--headless --isolated`) en Claude (`claude mcp add -s user`), Codex (`codex mcp add`), Kimi (`~/.kimi-code/mcp.json`) y Cursor (`~/.cursor/mcp.json`) cuando están instalados, y añade el permiso de `agente-lanzar` si el lanzador existe. No toca entradas que ya existan. En servidores con Hestia no registra el navegador y quita el que hubiera: allí no se hace QA y `npx @latest` ejecutaría código sin fijar.
 
+## Reglas y hooks para Codex, Kimi y Cursor (1.14.0)
+
+`ajustes.py` (una vez por versión) hace dos cosas para los agentes que no son Claude:
+
+- **Reglas.** Genera un `AGENTS.md` con la misma fuente que las reglas de Claude (`scripts/reglas.py`, sin las secciones propias de Claude Code: modelos y subagentes, coordinación entre sesiones, sesiones en servidores y delegar/QA) y lo escribe en `~/.codex/`, `~/.kimi-code/` y `~/.cursor/`. Solo si esa carpeta existe y el `AGENTS.md` no existe o ya lleva la marca `Generado por el plugin reglas`: uno propio nunca se pisa. Las opciones del plugin se leen de `pluginConfigs` en `~/.claude/settings.json`. Cursor CLI no tiene archivo global documentado: `agente-lanzar` antepone `~/.cursor/AGENTS.md` al encargo.
+- **Hooks de git.** Crea `~/.config/git/hooks/{pre-commit,commit-msg,pre-push}` y fija `core.hooksPath` global, solo si estaba vacío (si apunta a otro sitio, avisa y no lo toca). Cada hook llama a `hooks/git-hook.py` del plugin instalado, que reutiliza `anti-filtraciones.py`:
+  - `pre-commit`: mismos controles que `anti-filtraciones` sobre el índice.
+  - `commit-msg`: rechaza `Co-Authored-By` de una IA, «Generated with» seguido de un agente, `Claude-Session`, enlaces `claude.ai/code` y el emoji de robot.
+  - `pre-push`: bloquea el push a `main`/`master` y revisa los commits que se envían.
+
+Ante un fallo interno, o si falta el plugin o `python3`, los hooks dejan pasar y avisan por stderr. Es un guardarraíl, no un sandbox.
+
+**Encadenado.** Como `core.hooksPath` sustituye a `.git/hooks`, cada hook global ejecuta después el hook local del repo (`$(git rev-parse --git-common-dir)/hooks/<nombre>`) si existe. **Limitación:** los repos que fijan su propio `core.hooksPath` (husky, lefthook) siguen mandando: ahí se pierde el hook del plugin, no el suyo, y solo les llegan las reglas en texto.
+
+**Push confirmado a `main`.** Con el OK del usuario: `git push origin main --no-verify` (sigue casando con la regla ask `Bash(git push origin main*)`). El merge de PRs con `gh pr merge` no se ve afectado.
+
+**Desinstalar:** `git config --global --unset core.hooksPath && rm -r ~/.config/git/hooks`, y borrar los `AGENTS.md` que lleven la marca. Volver a ejecutar `ajustes.py` los recrea.
+
+Fuera de alcance: orquestación, contexto/autocompact de otros agentes, un `CLAUDE.md` que importe `AGENTS.md` y un `config.toml` por agente.
+
 ## Ajustes automáticos (1.3.0)
 
 En `SessionStart`, además de inyectar las reglas con `scripts/reglas.py`, se ejecuta:
@@ -128,6 +150,7 @@ JSON o escritura; si falla antes de guardar la marca, reintenta en otra sesión.
 El script conserva los demás ajustes de `~/.claude/settings.json` y configura:
 
 - Atribución vacía en commits y PRs.
+- `AGENTS.md` para Codex, Kimi y Cursor, y hooks de git globales (ver la sección siguiente).
 - Confirmación para los comandos de producción ya contemplados por el plugin.
 - Ventana de autocompact de 200K para los modelos definidos, respetando valores existentes.
 - Marketplace `thealejandro` con este formato:

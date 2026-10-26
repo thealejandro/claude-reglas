@@ -9,6 +9,8 @@ description: Delegar en Codex, Kimi o Cursor una tarea acotada (tests, refactor 
 
 ## Para editar (servidor con `agente-lanzar`)
 
+Codex, Kimi y Cursor leen las reglas del plugin en su `AGENTS.md` global (lo genera `ajustes.py`), y los hooks de git globales (`~/.config/git/hooks`) les bloquean secretos, atribución de IA en el commit y el push a `main`/`master`.
+
 1. Worktree en `~/work/<repo>-<tarea>` sobre una rama propia (nunca main/master/develop).
 2. Encargo corto en `~/work/_logs/<tarea>.md`: objetivo, «listo cuando», «no toques», pruebas a correr, consultar la doc oficial antes de tocar herramientas, commit convencional sin atribución, y si el contexto crece, dejar el avance en un archivo y seguir desde ahí.
 3. `agente-lanzar codex|kimi|cursor <worktree> <encargo>`: corre en tmux `agentes`, sin push, 2 h máximo, registro en `~/work/_logs/`.
