@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Aplica ajustes de usuario de forma idempotente; el hook es silencioso y tolerante."""
 import argparse
+import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -81,6 +83,61 @@ def configurar_otros_agentes():
                            capture_output=True, timeout=10, check=False)
 
 
+def escribir_agents_md(datos, raiz):
+    """Genera el AGENTS.md de Codex, Kimi y Cursor desde las mismas reglas; no pisa uno propio."""
+    spec = importlib.util.spec_from_file_location('reglas', raiz / 'scripts/reglas.py')
+    reglas = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reglas)
+    opciones = datos.get('pluginConfigs', {}).get('reglas@thealejandro', {}).get('options', {})
+    entorno = {'CLAUDE_PLUGIN_OPTION_' + clave.upper(): str(opciones[clave])
+               for clave in ('idioma', 'repo_runbooks', 'servidores', 'servidor_desarrollo') if clave in opciones}
+    texto = reglas.generar(entorno, otros_agentes=True)
+    for carpeta in ('.codex', '.kimi-code', '.cursor'):
+        ruta = Path.home() / carpeta / 'AGENTS.md'
+        if not ruta.parent.is_dir():
+            continue
+        actual = ruta.read_text(encoding='utf-8') if ruta.exists() else None
+        if actual is not None and not actual.startswith(reglas.MARCA):
+            continue
+        if actual != texto:
+            escribir_atomico(ruta, texto)
+
+
+# Mismo contenido para pre-commit, commit-msg y pre-push; encadena al hook local del repo.
+HOOK_GIT = """#!/bin/sh
+# Generado por el plugin reglas (ajustes.py). Encadena al hook del repo si existe.
+H=$(basename "$0"); IN=; [ "$H" = pre-push ] && IN=$(cat)
+P=$(ls -d "$HOME"/.claude/plugins/cache/thealejandro/reglas/*/ 2>/dev/null | sort -V | tail -1)
+if [ -n "$P" ] && [ -f "${P}hooks/git-hook.py" ]; then
+  printf '%s' "$IN" | python3 -I "${P}hooks/git-hook.py" "$H" "$@" || exit 1
+fi
+L="$(git rev-parse --git-common-dir)/hooks/$H"
+[ -x "$L" ] && { printf '%s' "$IN" | exec "$L" "$@"; }
+exit 0
+"""
+
+
+def instalar_hooks_git():
+    """Instala los hooks de git globales y fija core.hooksPath si está libre. Devuelve un aviso o None."""
+    if not shutil.which('git'):
+        return None
+    carpeta = Path.home() / '.config/git/hooks'
+    carpeta.mkdir(parents=True, exist_ok=True)
+    for nombre in ('pre-commit', 'commit-msg', 'pre-push'):
+        ruta = carpeta / nombre
+        if not ruta.exists() or ruta.read_text(encoding='utf-8') != HOOK_GIT:
+            escribir_atomico(ruta, HOOK_GIT)
+        ruta.chmod(0o755)
+    actual = subprocess.run(['git', 'config', '--global', '--get', 'core.hooksPath'],
+                            capture_output=True, text=True, timeout=10, check=False).stdout.strip()
+    if not actual:
+        subprocess.run(['git', 'config', '--global', 'core.hooksPath', str(carpeta)],
+                       capture_output=True, timeout=10, check=False)
+    elif os.path.realpath(os.path.expanduser(actual)) != os.path.realpath(carpeta):
+        return f'core.hooksPath global ya apunta a {actual}: no se toca y los hooks de git del plugin no se aplican.'
+    return None
+
+
 def aplicar(si_hace_falta):
     raiz = Path(__file__).resolve().parent.parent
     version = json.loads((raiz / '.claude-plugin/plugin.json').read_text(encoding='utf-8'))['version']
@@ -132,6 +189,10 @@ def aplicar(si_hace_falta):
             shutil.copyfile(ruta, respaldo)
         escribir_atomico(ruta, json.dumps(datos, indent=2, ensure_ascii=False) + '\n')
     configurar_otros_agentes()
+    escribir_agents_md(datos, raiz)
+    aviso = instalar_hooks_git()
+    if aviso and not si_hace_falta:
+        print(aviso)
     if not marca.exists() or marca.read_text(encoding='utf-8').strip() != version:
         escribir_atomico(marca, version + '\n')
     if not si_hace_falta:

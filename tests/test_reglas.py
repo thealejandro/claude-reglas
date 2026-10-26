@@ -29,6 +29,17 @@ class ReglasTest(unittest.TestCase):
             self.assertIn(presente, t)
         self.assertIsNone(MARCADOR.search(t))
 
+    def test_otros_agentes_quita_lo_propio_de_claude(self):
+        t = reglas.generar({'CLAUDE_PLUGIN_OPTION_SERVIDOR_DESARROLLO': 'srv-prueba',
+                            'CLAUDE_PLUGIN_OPTION_REPO_RUNBOOKS': 'mis-runbooks',
+                            'CLAUDE_PLUGIN_OPTION_SERVIDORES': 'a, b'}, otros_agentes=True)
+        self.assertTrue(t.startswith(reglas.MARCA))
+        for presente in ('Co-Authored-By', 'Responde siempre', 'mis-runbooks'):
+            self.assertIn(presente, t)
+        for ausente in ('subagente', 'claude-nueva-sesion', 'agente-lanzar'):
+            self.assertNotIn(ausente, t.split(reglas.AVISO, 1)[1])
+        self.assertIsNone(MARCADOR.search(t))
+
     def test_idioma(self):
         self.assertIn('Responde siempre en English', reglas.generar({'CLAUDE_PLUGIN_OPTION_IDIOMA': 'English'}))
 

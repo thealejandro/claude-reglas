@@ -287,7 +287,7 @@ def read_gitleaks_report(report_path, returncode):
     return report
 
 
-def gitleaks_scan(executable, root, actions, deadline, allowed_paths, added_by_action):
+def gitleaks_scan(executable, root, actions, deadline, allowed_paths, added_by_action, log_opts=None):
     findings = []
     warnings = []
     with tempfile.TemporaryDirectory(prefix="reglas-gitleaks-") as directory:
@@ -300,7 +300,7 @@ def gitleaks_scan(executable, root, actions, deadline, allowed_paths, added_by_a
             if action == "commit":
                 command.append("--staged")
             else:
-                command.append("--log-opts=@{u}..HEAD")
+                command.append("--log-opts=" + (log_opts or "@{u}..HEAD"))
             try:
                 result = run(command, root, deadline)
                 if result.returncode not in (0, 1):
