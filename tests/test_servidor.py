@@ -86,6 +86,39 @@ class ServidorTest(unittest.TestCase):
         self.assertIn('claude plugin marketplace update thealejandro', registro)
         self.assertIn('claude plugin update reglas@thealejandro', registro)
 
+    def test_actualizador_renueva_solo_los_lanzadores_instalados(self):
+        local = self.home / '.local/bin'
+        local.mkdir(parents=True)
+        (local / 'claude').write_text('#!/bin/bash\nexit 0\n')
+        (local / 'claude').chmod(0o755)
+        cache = self.home / '.claude/plugins/cache/thealejandro/reglas/9.9.9'
+        for rel in ('scripts/servidor', 'scripts/actualizar'):
+            (cache / rel).mkdir(parents=True)
+        (cache / 'scripts/ajustes.py').write_text('')
+        for rel in ('servidor/claude-arranque', 'servidor/claude-nueva-sesion', 'servidor/claude-nuevo',
+                    'servidor/claude-arranque.service', 'qa-pedir', 'agente-lanzar'):
+            (cache / 'scripts' / rel).write_text(f'nuevo {rel}\n')
+            (cache / 'scripts' / rel).chmod(0o644)
+        destino = self.home / 'destino'
+        destino.mkdir()
+        (destino / 'claude-arranque').write_text('viejo\n')
+        (destino / 'qa-pedir').write_text('nuevo qa-pedir\n')
+        (cache / 'scripts/agente-lanzar').chmod(0o666)
+        (destino / 'agente-lanzar').write_text('viejo\n')
+        self.env['REGLAS_DESTINO_LANZADORES'] = str(destino)
+        r = self.ejecutar(RAIZ / 'scripts/actualizar/claude-actualizar-reglas')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        registro = (self.home / '.local/state/claude-actualizar-reglas.log').read_text()
+        self.assertEqual((destino / 'claude-arranque').read_text(), 'nuevo servidor/claude-arranque\n')
+        self.assertEqual(os.stat(destino / 'claude-arranque').st_mode & 0o777, 0o755)
+        self.assertIn('renovado', registro)
+        # No instala lo que falta (avisa si es del módulo), ni unidades, ni desde un archivo escribible por otros.
+        self.assertEqual(sorted(p.name for p in destino.iterdir()), ['agente-lanzar', 'claude-arranque', 'qa-pedir'])
+        self.assertIn('claude-nuevo y no está instalado', registro)
+        self.assertEqual((destino / 'agente-lanzar').read_text(), 'viejo\n')
+        self.assertIn('no renuevo agente-lanzar', registro)
+        self.assertNotIn('qa-pedir', registro)
+
     def test_usuario_inexistente(self):
         self.ejecutable('getent', '#!/bin/bash\nexit 2\n')
         self.assertEqual(self.ejecutar(INSTALAR, '--simular', 'nadie', 'equipo').returncode, 2)
