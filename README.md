@@ -43,6 +43,22 @@ claude plugin marketplace add midudev/better-claude
 for p in sub-meter token-meter context-meter image-preview time-machine narrator; do claude plugin install $p@better-claude; done
 ```
 
+## Referencias de UI/UX opcionales (1.15.0)
+
+El marketplace `thealejandro` ofrece dos plugins de terceros que no se instalan con `reglas`: aparecen en `/plugin` y cada uno decide. Van fijados a un commit revisado; su texto entra en el prompt y taste-skill ejecuta scripts en local, así que no siguen la última versión.
+
+| Plugin | Para qué | Instalar |
+|---|---|---|
+| `frontend-design` (Anthropic, oficial) | Diseño visual con criterio propio, sin plantillas. Empieza por este. | `claude plugin install frontend-design@claude-plugins-official` |
+| `ux-designer` ([szilu](https://github.com/szilu/ux-designer-skill)) | Revisar y construir apps de trabajo: usabilidad, WCAG 2.2, formularios, tablas, dashboards, i18n. ~110 tokens por sesión. | `claude plugin install ux-designer@thealejandro` |
+| `taste-skill` ([Leonxlnx](https://github.com/Leonxlnx/taste-skill)) | Dirección de arte para landings y páginas públicas, comprobada en un navegador real (Node). ~240 tokens por sesión. | `claude plugin install taste-skill@thealejandro` |
+
+Revisados en esos commits (sin inyecciones ni hooks): ux-designer es solo Markdown. taste-skill no instala nada ni manda datos del proyecto, pero busca imágenes en APIs abiertas (Openverse, Wikimedia, museos, NASA), abre Chrome headless en local, guarda su historial en `~/.taste-skill/` y sus escenas cargan GSAP/Lenis de jsDelivr sin SRI.
+
+No usamos `npx skills add`: copia las skills a `~/.claude/skills` fuera del sistema de plugins, sin versión ni actualización. Tampoco van como `dependencies` de `reglas`, que las instalaría en todas las máquinas.
+
+Para subir una versión: revisar el diff del repo entre el `sha` actual y el nuevo, cambiar `sha` (y `ref`) en `.claude-plugin/marketplace.json` y pasar `claude plugin validate .claude-plugin/marketplace.json`.
+
 ## Hook `anti-filtraciones`
 
 Se ejecuta como `PreToolUse` sobre `Bash`, solo cuando el comando contiene `git commit` o `git push`. En un commit revisa el diff del índice; en un push revisa los commits pendientes respecto a `@{u}`, si la rama tiene upstream.
