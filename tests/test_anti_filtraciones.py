@@ -28,6 +28,8 @@ class AntiFiltracionesTests(unittest.TestCase):
         self.git("init", "-q")
         self.git("config", "user.name", "Pruebas")
         self.git("config", "user.email", "pruebas@example.invalid")
+        # Sin los hooks globales de 1.14.0: su pre-commit rechazaría los secretos de prueba.
+        self.git("config", "core.hooksPath", str(base / "sin-hooks"))
         self.write("inicial.txt", "inicio\n")
         self.git("add", "inicial.txt")
         self.git("commit", "-q", "-m", "inicial")
