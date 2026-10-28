@@ -1,6 +1,6 @@
 {
   "name": "reglas",
-  "version": "1.14.1",
+  "version": "1.15.0",
   "description": "Reglas de trabajo para sesiones de Claude Code: idioma, commits sin atribución, tickets, confirmación para producción, reparto de modelos con Jev; módulo de servidor opcional",
   "author": { "name": "thealejandro" },
   "license": "UNLICENSED",

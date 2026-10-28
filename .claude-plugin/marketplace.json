@@ -2,6 +2,21 @@
   "name": "thealejandro",
   "owner": { "name": "thealejandro" },
   "plugins": [
-    { "name": "reglas", "description": "Reglas comunes para todas las sesiones de Claude Code", "source": "./" }
+    { "name": "reglas", "description": "Reglas comunes para todas las sesiones de Claude Code", "source": "./" },
+    {
+      "name": "ux-designer",
+      "description": "Opcional (szilu, MIT): criterio de UX y accesibilidad para revisar y construir interfaces (WCAG 2.2, formularios, tablas, dashboards, i18n)",
+      "source": { "source": "github", "repo": "szilu/ux-designer-skill", "sha": "c869d32fd8df7bd7fcd1db68e93bd3e89eed5161" },
+      "skills": ["./"],
+      "license": "MIT",
+      "homepage": "https://github.com/szilu/ux-designer-skill"
+    },
+    {
+      "name": "taste-skill",
+      "description": "Opcional (Leonxlnx, MIT): dirección de arte para landings, páginas de producto y dashboards, revisada en un navegador real",
+      "source": { "source": "github", "repo": "Leonxlnx/taste-skill", "ref": "v2.1.5", "sha": "12af471f627f866411b4bd785b19646d3672784c" },
+      "license": "MIT",
+      "homepage": "https://github.com/Leonxlnx/taste-skill"
+    }
   ]
 }
