@@ -205,19 +205,22 @@ Las reglas de despliegue/CI también requieren activar alertas de Dependabot en
 repositorios nuevos o que carezcan de ellas, activar escaneo de secretos cuando
 sean públicos y avisar al usuario de las alertas abiertas.
 
-## Comprobación aislada
+## Comprobación y CI
 
-Desde la raíz del repo, usa un HOME temporal para no modificar tus ajustes reales:
+`scripts/comprobar.sh` corre todo lo que hay que comprobar, igual en local que en CI (GitHub Actions, `.github/workflows/ci.yml`, en cada PR y en cada push a `main`, en runners de GitHub):
+
+- JSON de `plugin.json`, `marketplace.json` y `hooks.json`;
+- frontmatter de cada skill (`name` igual a su carpeta y `description`);
+- **sin rutas personales**: el repo es público, así que nada de carpetas personales de ningún PC (la carpeta home de un usuario, salvo la del usuario de servidor `dev` ya documentado, ni las carpetas de trabajo o de diseño); en su lugar se nombran repos u opciones del plugin (`repo_runbooks`). El patrón exacto está en el script;
+- `reglas.py` y `ajustes.py` (tres pasadas) en un HOME temporal, sin tocar tus ajustes reales;
+- los tests de `tests/`;
+- `claude plugin validate .` (en local, si `claude` está instalado).
 
 ```bash
-HOME_PRUEBA=$(mktemp -d)
-HOME="$HOME_PRUEBA" python3 -I scripts/ajustes.py
-HOME="$HOME_PRUEBA" python3 -I scripts/ajustes.py
-HOME="$HOME_PRUEBA" python3 -I scripts/ajustes.py --si-hace-falta
-python3 -I scripts/reglas.py > /dev/null
-python3 -m json.tool hooks/hooks.json > /dev/null
-claude plugin validate .
+scripts/comprobar.sh
 ```
+
+Antes de pedir el merge de una PR, que pase en local y en CI.
 
 ## Módulo de servidor
 
