@@ -4,11 +4,10 @@
     python3 perfil-audio.py out/video.mp4 [referencia1.mp4 ...]
 
 Solo necesita ffmpeg y numpy. Por cada vídeo imprime:
-  - huecos: cortes a casi silencio (≥ 100 ms a −35 dB del nivel alto). Los anuncios de software de
-    referencia tienen 1–4 cada 30 s, en los golpes de texto; 0–1 suena a «tema de fondo».
+  - huecos: cortes a casi silencio (≥ 100 ms a −35 dB del nivel alto).
   - modulación 80–500 Hz: mediana de (p90 − p10) del nivel de esa banda en ventanas de 2 s.
-    Pocos dB = un colchón sostenido (pads, cuerdas, reverb, acorde largo) = el «tono de fondo».
-    Referencias rítmicas: 13–26 dB. Por debajo de ~10 dB, revisa música y efectos tonales.
+    Pocos dB = fondo sostenido. Orientativo: en 35 anuncios oficiales va de 4,6 a 26 dB y los huecos
+    de 0 a 12, así que compara con referencias del mismo estilo; el veredicto es del oído.
   - perfil: una barra por segundo del nivel relativo (para ver respiros y el final).
 """
 import subprocess

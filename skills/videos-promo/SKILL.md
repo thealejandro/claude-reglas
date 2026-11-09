@@ -62,7 +62,9 @@ En los anuncios de producto de referencia la música **no es un colchón**: es r
 - Para bajar la energía, **quita instrumentos o para la música**; no la escondas con pasa-bajos ni bajando el volumen bajo un zumbido.
 - Final: termina en un golpe (*button*) o en silencio sobre el logo; nada de acordes de 5–6 s apagándose.
 - Si la pista elegida es de colchón, cambia de pista en vez de maquillarla.
-- Comprobación objetiva (§6): `perfil-audio.py` de esta skill; la modulación en 80–500 Hz debe ir ≥ 12 dB y al menos un hueco.
+- La prueba de oro: en todo momento hay **algo en primer plano** (ritmo, melodía o voz). Un fondo sostenido es aceptable si algo con forma va encima (Vercel, Shopify, Copilot); un zumbido sin forma, nunca.
+- Suave, no ensordecedor: ataques redondos, percusión discreta, nada de golpes graves ni chasquidos agresivos.
+- Comprobación orientativa (§6): `perfil-audio.py`. No es un aprobado/suspenso: sirve para comparar con las referencias y con el oído del usuario.
 
 - Crédito obligatorio en: README, notas de la release y la página web donde se muestre el vídeo.
 
@@ -83,7 +85,7 @@ En los anuncios de producto de referencia la música **no es un colchón**: es r
   ffmpeg -v error -y -i out/video.mp4 -lavfi showspectrumpic=s=1920x600:legend=1 espectrograma.png
   ```
   y mira el espectrograma (clics, zumbidos, silencios limpios) y la sincronía de los ataques (±1 fotograma).
-- **Compara con referencias**: baja 2–3 anuncios oficiales de producto recientes (con OK del usuario; `yt-dlp -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]"` a una carpeta temporal, solo para analizar, nunca al repo) y pasa los dos por `python3 <skill>/scripts/perfil-audio.py out/video.mp4 ref1.mp4 ref2.mp4`. Medido en 2026-11: Raycast, Notion y Apple Creator Studio dan 13–26 dB de modulación en 80–500 Hz y 1–4 huecos; el reel de xaSeguros v1 (cuerdas de «Origami» + tonos y sub sintetizados + reverb), 10 dB y 1 hueco: el «tono de fondo» del que se quejó el usuario. Mira también sus espectrogramas uno encima de otro.
+- **Compara con referencias**: baja 2–3 anuncios oficiales de producto recientes (con OK del usuario; `yt-dlp -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]"` a una carpeta temporal, solo para analizar, nunca al repo) y pasa los dos por `python3 <skill>/scripts/perfil-audio.py out/video.mp4 ref1.mp4 ref2.mp4`. Medido en 2026-11 sobre 35 anuncios: la modulación en 80–500 Hz va de 4,6 dB (Shopify) a 26 dB (Notion) y los huecos de 0 a 12 (GitHub), así que **la cifra sola no decide**. El reel de xaSeguros v1 (10 dB, 1 hueco) estaba dentro del rango; lo que fallaba era el timbre: cuerdas sostenidas + tonos y sub sintetizados + reverb, sin nada en primer plano. Mira los espectrogramas uno encima de otro y deja el veredicto al oído del usuario.
 - Mosaico de las referencias (`tile=5x3`) para comparar también el lenguaje visual (§1.3).
 - Mosaico de fotogramas para revisar imagen: `ffmpeg -i out/video.mp4 -vf "fps=1/2,scale=480:-1,tile=5x3" mosaico.png`; míralo con Read.
 - **El usuario aprueba de oído**: envíale el vídeo (SendUserFile) y pide que lo escuche con auriculares antes de mergear.
@@ -107,7 +109,8 @@ En los anuncios de producto de referencia la música **no es un colchón**: es r
 
 ## Fuentes (sonido y lenguaje visual)
 
-- Análisis propio (2026-11) de 8 anuncios oficiales: Apple (*iPhone 17 Pro*, *Introducing Apple Creator Studio*), Linear (*Introducing Linear Agent*), Notion (*Introducing the new Notion AI*, *The Search*), The Browser Company (*Arc 1.0*), Raycast (*Raycast Pro — Preview*) y Stripe (*Reader S700*): solo dos llevan voz; los demás son música rítmica + efectos de interfaz.
+- Análisis propio (2026-11) de 35 anuncios oficiales: Apple, Linear, Notion, Arc, Raycast, Stripe, Google (Pixel 10, Gemini), Microsoft (Copilot, Surface), Samsung, Shopify, Vercel, GitHub, Figma, Framer, Canva, Dropbox, Duolingo, Anthropic (Claude) y OpenAI (ChatGPT). Unos 14 llevan voz en off; con voz, la música va debajo; sin voz, la música rítmica + efectos de interfaz lleva el anuncio.
+- Cada marca tiene un **concepto visual propio**, no solo capturas: Shopify (collage de pintura clásica), Duolingo (personajes), Surface (tonos cálidos, manos), Copilot (interfaz de cristal sobre personas), Gemini/GitHub (UI brillante sobre negro azulado), Vercel (blanco mínimo), Anthropic (objetos analógicos y cine cálido, tipografía con serifa), OpenAI (vida cotidiana con texto encima, punto y blanco). Define el de la marca antes del guion y no copies el de otra.
 - [Material Design — Applying sound to UI](https://m2.material.io/design/sound/applying-sound-to-ui.html): sonidos de héroe escasos, el silencio cuenta tanto como el sonido.
 - [IRPR — Spotting music cues](https://sounddesign.irpr.agency/guides/how-to-spot-music-cues-with-a-composer/): la música «de pared a pared» sin plan compite con el diseño sonoro y cansa; decide dónde no suena.
 - Olsen, *Journal of Advertising* (1995): cortar a silencio justo antes del mensaje clave mejora el recuerdo frente a música de fondo continua.
