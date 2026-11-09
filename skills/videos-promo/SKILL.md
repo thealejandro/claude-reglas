@@ -24,7 +24,13 @@ Referencias que mandan sobre esta skill (léelas al empezar):
    - **Enseñar el producto en uso** (grabaciones reales, cámara que sigue la acción) antes que capturas estáticas.
    - Sin fundidos a negro entre escenas: cortes en los golpes de música y continuidad de objeto (`TransitionSeries`, capa persistente).
    - **Una sola llamada a la acción** al final (URL o «enlace en el perfil») + firma, ~5 s.
-3. Idiomas: textos en pantalla parametrizados (prop `lang`); renderiza **es y en**. La web usa la versión de su idioma; los README, la inglesa.
+3. Lenguaje visual (de anuncios de Apple, Linear, Notion, Raycast, Arc y Stripe, revisados fotograma a fotograma en 2026-11):
+   - **Una idea por plano**: 2–4 palabras en pantalla («Prompt it.», «Select it.», «Cloud Sync»), nunca frases largas sobre la interfaz. Los textos van solos sobre fondo limpio o encima del producto, no los dos compitiendo.
+   - Fondo neutro (negro, blanco o un degradado suave de la marca) y **el producto grande**: UI a tamaño legible, inclinada en perspectiva 3D o con zoom a la parte que importa (Linear, Raycast); la ventana completa y diminuta no vende.
+   - Ritmo sostenido: un plano cada ~1–2 s; texto cinético que entra palabra a palabra con el pulso.
+   - Si encaja, contexto humano (Notion: la persona usando el producto con la UI flotando encima).
+   - Cierre: nombre + frase de marca de 3–5 palabras («Linear. At your command.», «For your life's work.») + logo, a menudo con precio o URL. Pocos elementos.
+4. Idiomas: textos en pantalla parametrizados (prop `lang`); renderiza **es y en**. La web usa la versión de su idioma; los README, la inglesa.
 
 ## 2. Marca
 
@@ -45,14 +51,28 @@ Referencias que mandan sobre esta skill (léelas al empezar):
 - **Prohibido**: voces sintéticas, música generada por IA, pads genéricos sintetizados a mano y pistas cuya página declare herramientas de IA (el crédito CC BY enlaza a esa página).
 - Fuentes válidas, con licencia que permita uso comercial y crédito: Kevin MacLeod / incompetech (CC BY 4.0), compositores con catálogo propio revisado. Comprueba la licencia **en la página de la pista** y guarda URL + texto de crédito.
 - Antes de descargar: pide OK al usuario (nombre, origen, tamaño); a una carpeta nueva y vacía; nunca ejecutes nada descargado.
-- Arreglo minimalista, no un tema sonando de principio a fin: trocea por compases respetando la progresión, estira ≤ 4 % para que los golpes caigan en su fotograma, **silencios** de 1–2 pulsos antes de los momentos clave, filtrado y volumen por escena (se apaga en los respiros, se abre en los clímax), final con acorde que se apaga.
+- Arreglo minimalista, no un tema sonando de principio a fin: trocea por compases respetando la progresión, estira ≤ 4 % para que los golpes caigan en su fotograma, **silencios** de 1–2 pulsos antes de los momentos clave, volumen por escena.
+
+### Nada de «tono de fondo» (error repetido; el usuario lo detecta enseguida)
+
+En los anuncios de producto de referencia la música **no es un colchón**: es rítmica, seca y va en primer plano, y se **para en seco** en los golpes de texto. Lo que suena a «tono de fondo» es lo sostenido: pads, cuerdas largas, notas pedal, colas de reverb, acordes que se apagan durante segundos, tonos senoidales y golpes graves sintetizados, y la música filtrada (pasa-bajos) que deja solo un zumbido grave.
+
+- Elige pistas **de ataques** (percusión, pizzicato, piano o sintes cortos, bajo rítmico), no ambient, cinematográficas ni de cuerdas. Descarta las que en el espectrograma muestran bandas horizontales continuas en 80–500 Hz.
+- **Cortes a silencio digital** de 0,2–1 s sincronizados con los cambios de texto o de plano: 1–4 cada 30 s (Apple Creator Studio, Raycast). Corte seco, sin reverb que rellene el hueco.
+- Para bajar la energía, **quita instrumentos o para la música**; no la escondas con pasa-bajos ni bajando el volumen bajo un zumbido.
+- Final: termina en un golpe (*button*) o en silencio sobre el logo; nada de acordes de 5–6 s apagándose.
+- Si la pista elegida es de colchón, cambia de pista en vez de maquillarla.
+- Comprobación objetiva (§6): `perfil-audio.py` de esta skill; la modulación en 80–500 Hz debe ir ≥ 12 dB y al menos un hueco.
+
 - Crédito obligatorio en: README, notas de la release y la página web donde se muestre el vídeo.
 
 ## 5. Efectos de sonido
 
 - Síntesis propia en el script de audio (código del repo → MIT) o packs CC0 (Kenney). Sin packs con atribución dudosa.
-- Discretos y a fotograma: tic por elemento que aparece, soplido solo en transiciones grandes (pocos), golpe grave en los cortes clave, tono suave para el producto (p. ej. la isla al abrirse).
-- Niveles orientativos: ticks y soplidos 20–40 dB bajo la música; tonos ~16–19 dB; golpes graves casi al nivel pero en el sub.
+- Los efectos suenan **a la interfaz**, no a sintetizador: clics de ratón y teclado, *toggles*, un *pop* corto al aparecer una tarjeta, todo seco y < 150 ms, en el fotograma exacto en que se ve la acción (si llega tarde, se nota).
+- Pocos: un sonido de héroe solo en el momento clave; los repetidos, cortos y variados para que no cansen ([Material Design](https://m2.material.io/design/sound/applying-sound-to-ui.html)). Si un sonido no aporta información ni emoción, silencio.
+- **Prohibido** añadir tonos senoidales sostenidos, *drones*, golpes graves (sub) en cada corte o envíos de reverb largos: son justo el «tono de fondo» de §4. Un golpe grave, como mucho uno y solo si la música no lo trae.
+- Niveles orientativos: clics 20–30 dB bajo la música; soplidos (si hay) 25–35 dB.
 
 ## 6. Mezcla y verificación (Claude no puede escuchar)
 
@@ -63,6 +83,8 @@ Referencias que mandan sobre esta skill (léelas al empezar):
   ffmpeg -v error -y -i out/video.mp4 -lavfi showspectrumpic=s=1920x600:legend=1 espectrograma.png
   ```
   y mira el espectrograma (clics, zumbidos, silencios limpios) y la sincronía de los ataques (±1 fotograma).
+- **Compara con referencias**: baja 2–3 anuncios oficiales de producto recientes (con OK del usuario; `yt-dlp -f "bv*[height<=720][ext=mp4]+ba[ext=m4a]"` a una carpeta temporal, solo para analizar, nunca al repo) y pasa los dos por `python3 <skill>/scripts/perfil-audio.py out/video.mp4 ref1.mp4 ref2.mp4`. Medido en 2026-11: Raycast, Notion y Apple Creator Studio dan 13–26 dB de modulación en 80–500 Hz y 1–4 huecos; el reel de xaSeguros v1 (cuerdas de «Origami» + tonos y sub sintetizados + reverb), 10 dB y 1 hueco: el «tono de fondo» del que se quejó el usuario. Mira también sus espectrogramas uno encima de otro.
+- Mosaico de las referencias (`tile=5x3`) para comparar también el lenguaje visual (§1.3).
 - Mosaico de fotogramas para revisar imagen: `ffmpeg -i out/video.mp4 -vf "fps=1/2,scale=480:-1,tile=5x3" mosaico.png`; míralo con Read.
 - **El usuario aprueba de oído**: envíale el vídeo (SendUserFile) y pide que lo escuche con auriculares antes de mergear.
 
@@ -82,3 +104,11 @@ Referencias que mandan sobre esta skill (léelas al empezar):
 - Publicar: `gh release upload <tag> out/*.mp4 --clobber` (o release nueva) con el crédito de la música en las notas, y PR en `thealejandro/portfolio` (`public/omarchy/`, `src/components/omarchy/media.ts`).
 - Actualiza el runbook del proyecto en el repo de runbooks con decisiones nuevas.
 - Limpieza al terminar: renders intermedios, copias sin audio obsoletas, fotogramas y temporales.
+
+## Fuentes (sonido y lenguaje visual)
+
+- Análisis propio (2026-11) de 8 anuncios oficiales: Apple (*iPhone 17 Pro*, *Introducing Apple Creator Studio*), Linear (*Introducing Linear Agent*), Notion (*Introducing the new Notion AI*, *The Search*), The Browser Company (*Arc 1.0*), Raycast (*Raycast Pro — Preview*) y Stripe (*Reader S700*): solo dos llevan voz; los demás son música rítmica + efectos de interfaz.
+- [Material Design — Applying sound to UI](https://m2.material.io/design/sound/applying-sound-to-ui.html): sonidos de héroe escasos, el silencio cuenta tanto como el sonido.
+- [IRPR — Spotting music cues](https://sounddesign.irpr.agency/guides/how-to-spot-music-cues-with-a-composer/): la música «de pared a pared» sin plan compite con el diseño sonoro y cansa; decide dónde no suena.
+- Olsen, *Journal of Advertising* (1995): cortar a silencio justo antes del mensaje clave mejora el recuerdo frente a música de fondo continua.
+- [IRPR — Launch films](https://sounddesign.irpr.agency/applications/launch-films/) y [XO3D — Sound design for product films](https://xo3d.co.uk/guides/sound-design-product-films/): anticipación → sonido de héroe en la revelación; el silencio transmite confianza.
