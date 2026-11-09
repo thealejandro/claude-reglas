@@ -8,11 +8,12 @@ description: Flujo para hacer o mejorar vídeos promocionales de thealejandro (a
 Objetivo: anuncios de nivel profesional, al estilo de las presentaciones de Apple, que **no parezcan ni suenen hechos con IA**. Todo en español con el usuario.
 
 Referencias que mandan sobre esta skill (léelas al empezar):
-- Runbook: `~/Work/infra-runbooks/omarchy-promo/RUNBOOK.md` (decisiones y flujo) e informe de mejoras `~/Work/infra-runbooks/omarchy-promo/mejoras-2026-11/INFORME.md` (con fuentes).
-- Proyecto de referencia: `~/Work/omarchy-promo` (README: estructura, sonido, licencias).
+- Runbook del vídeo: carpeta `omarchy-promo/` del repo de runbooks (opción `repo_runbooks` del plugin): `RUNBOOK.md` (decisiones y flujo) y `mejoras-2026-11/INFORME.md` (informe de mejoras con fuentes).
+- Proyecto de referencia: repo `thealejandro/omarchy-promo` (README: estructura, sonido, licencias).
 - Técnica de Remotion: skills oficiales del proyecto en `.agents/skills/` (empieza por `remotion-best-practices`). En un proyecto nuevo: `npx remotion skills add` (pide OK al usuario: es una descarga).
-- Marca: `~/Streaming/diseno/MARCA.md` (manda §0) y logotipos en `~/Streaming/marca/`. **`~/Streaming` es solo lectura**: copia lo que necesites al proyecto. Si no está en esta máquina, usa los logotipos ya copiados en `omarchy-promo/public/` o en `thealejandro/portfolio`.
-- **En otra máquina**: si faltan las carpetas, clona por HTTPS `XACodev/infra-runbooks` y `thealejandro/omarchy-promo` en `~/Work/` (`gh repo clone …`). La grabación del escritorio (§3) solo aplica en un equipo con Omarchy.
+- Marca: el `MARCA.md` del canal (manda §0) y sus logotipos, en la carpeta de diseño del usuario, **solo lectura**: copia al proyecto lo que necesites. Si no está en esta máquina, usa los logotipos ya copiados en `omarchy-promo/public/` o en `thealejandro/portfolio`.
+
+**Si falta algún repo en esta máquina, clónalo tú sin preguntar** (es solo lectura): `gh repo clone <owner>/<repo>` por HTTPS en el directorio de trabajo donde estén los demás repos, o `git -C <repo> pull` si ya existe. Si `gh` no tiene sesión, dile al usuario el comando exacto (`gh auth login`). La grabación del escritorio (§3) solo aplica en un equipo con Omarchy.
 
 ## 1. Antes de programar
 
@@ -35,9 +36,9 @@ Referencias que mandan sobre esta skill (léelas al empezar):
 ## 3. Grabar el escritorio
 
 - Siempre en un escritorio aparte (el 9) y **con OK del usuario antes de grabar**: dile qué se graba, cuánto dura y que no toque ratón ni teclado.
-- Sin datos personales: carpeta demo `~/tema-demo` (autor `demo`), btop con `net_iface = "lo"`, «no molestar» activado durante la toma, sin ubicación del clima, cierra notificaciones antes (`qs ipc -p /usr/share/omarchy/shell/shell.qml call notifications dismissAll`).
+- Sin datos personales: una carpeta de proyecto falsa (autor `demo`), btop con `net_iface = "lo"`, «no molestar» activado durante la toma, sin ubicación del clima, cierra notificaciones antes (`qs ipc -p /usr/share/omarchy/shell/shell.qml call notifications dismissAll`).
 - `trap` que restaure tema, fondo, barra, escritorio y «no molestar» tal como estaban. Nunca tocar `/usr/share/omarchy`.
-- Herramientas: `gpu-screen-recorder` (o `omarchy capture`, ver la skill `omarchy`/`capture.md`); `ydotool` para mover el cursor. Ejemplos: `omarchy-promo/scripts/capture-clips.sh` y `infra-runbooks/omarchy-themes/herramientas/capture-extras.sh`.
+- Herramientas: `gpu-screen-recorder` (o `omarchy capture`, ver la skill `omarchy`/`capture.md`); `ydotool` para mover el cursor. Ejemplos: `scripts/capture-clips.sh` de `omarchy-promo` y `omarchy-themes/herramientas/capture-extras.sh` del repo de runbooks.
 
 ## 4. Música (que no suene a IA)
 
@@ -79,5 +80,5 @@ Referencias que mandan sobre esta skill (léelas al empezar):
 - Repo nuevo: público con licencia (MIT para el código; la música y las fuentes con la suya; logotipo y nombre excluidos de la MIT), Dependabot y escaneo de secretos.
 - Trabaja en rama y PR; commits con la skill `reglas:commit`. Nada de merges, releases ni push a `main`/`master` sin el resumen de producción y el OK del usuario.
 - Publicar: `gh release upload <tag> out/*.mp4 --clobber` (o release nueva) con el crédito de la música en las notas, y PR en `thealejandro/portfolio` (`public/omarchy/`, `src/components/omarchy/media.ts`).
-- Actualiza el runbook (`infra-runbooks/omarchy-promo/RUNBOOK.md` o el del proyecto) con decisiones nuevas.
+- Actualiza el runbook del proyecto en el repo de runbooks con decisiones nuevas.
 - Limpieza al terminar: renders intermedios, copias sin audio obsoletas, fotogramas y temporales.
