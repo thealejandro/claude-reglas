@@ -11,24 +11,18 @@ import sys
 import tempfile
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import redaccion  # noqa: E402
+from redaccion import CONTENT_RULES  # noqa: E402
+
 TIMEOUT = 5
 ALLOW_MARK = "reglas:permitir"
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 SAT_RE = re.compile(r"\bSAT\b")
-CONTENT_RULES = (
-    ("clave privada", re.compile(r"\bBEGIN [A-Z0-9 ]*PRIVATE KEY\b"), 0),
-    ("token de GitHub", re.compile(r"(?<![A-Za-z0-9_])(?:ghp_|gho_)[A-Za-z0-9]{8,}(?![A-Za-z0-9])"), 0),
-    ("token de GitHub", re.compile(r"(?<![A-Za-z0-9_])github_pat_[A-Za-z0-9_]{8,}(?![A-Za-z0-9_])"), 0),
-    ("clave de AWS", re.compile(r"(?<![A-Z0-9])AKIA[A-Z0-9]{16}(?![A-Z0-9])"), 0),
-    ("token de Slack", re.compile(r"(?<![A-Za-z0-9])xox[a-z]-[A-Za-z0-9-]{8,}(?![A-Za-z0-9-])"), 0),
-    ("clave de Stripe", re.compile(r"(?<![A-Za-z0-9_])sk_live_[A-Za-z0-9]{8,}(?![A-Za-z0-9])"), 0),
-    ("clave de Anthropic", re.compile(r"(?<![A-Za-z0-9_-])sk-ant-[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])"), 0),
-    ("clave de OpenAI", re.compile(r"(?<![A-Za-z0-9_-])sk-proj-[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])"), 0),
-    ("JWT", re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{16,}(?![A-Za-z0-9_-])"), 0),
-    ("asignación de secreto", re.compile(r"(?i)\b(?:password|secret|api_key|token)\b\s*=\s*([\"'])(?P<value>[^\"'\r\n]{12,})\1"), "value"),
-    ("XML de factura FEL", re.compile(r"<dte:GTDocumento\b"), 0),  # reglas:permitir
-    ("DPI de Guatemala", re.compile(r"(?<!\d)\d{4}[ -]\d{5}[ -]\d{4}(?!\d)"), 0),
-)
+GH_RE = re.compile(r"\bgh\s+(?:(?:-R|--repo)[\s=]+\S+\s+)?(?:issue|pr)\s+(?:create|comment|edit|review)\b")
+GH_REPO_RE = re.compile(r"(?:^|\s)(?:-R|--repo)(?:\s+|=)([\w.-]+/[\w.-]+)")
+BODY_FILE_RE = re.compile(r'(?:^|\s)(?:--body-file|-F)(?:\s+|=)(?:"([^"]+)"|\'([^\']+)\'|(\S+))')
+MAX_BODY = 1024 * 1024
 
 
 class HookFailure(Exception):
@@ -356,16 +350,78 @@ def decision_reason(findings, warnings):
     return reason
 
 
+def read_body_files(command, cwd):
+    texts = []
+    for match in BODY_FILE_RE.finditer(command):
+        name = next(group for group in match.groups() if group)
+        if name == "-":
+            continue
+        path = os.path.join(cwd, os.path.expanduser(name))
+        try:
+            with open(path, encoding="utf-8", errors="replace") as source:
+                texts.append(source.read(MAX_BODY))
+        except OSError:
+            continue
+    return texts
+
+
+def repo_visibility(command, cwd, deadline):
+    repo = GH_REPO_RE.search(command)
+    args = ["gh", "repo", "view"] + ([repo.group(1)] if repo else []) + ["--json", "visibility", "-q", ".visibility"]
+    try:
+        result = run(args, cwd, deadline)
+    except (HookFailure, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip().upper() or None
+
+
+def active_text(texts):
+    lines = []
+    for text in texts:
+        lines.extend(line for line in text.splitlines() if ALLOW_MARK not in line)
+    return "\n".join(lines)
+
+
+def github_text_check(command, cwd, deadline):
+    """Cuerpos de gh issue/pr: secretos siempre; hosts, IPs, usuarios y rutas si el repo destino es público."""
+    if not GH_RE.search(command):
+        return None
+    text = active_text([command] + read_body_files(command, cwd))
+    secrets = redaccion.buscar_secretos(text)
+    if secrets:
+        label, value = secrets[0]
+        return "deny", "Anti-filtraciones: el texto del issue o PR contiene {0} (prefijo «{1}»){2}. Quítalo y reescribe el texto.".format(
+            label, value[:4], "" if len(secrets) == 1 else " y {0} hallazgos más".format(len(secrets) - 1))
+    private = redaccion.buscar_privados(text)
+    if not private:
+        return None
+    visibility = repo_visibility(command, cwd, deadline)
+    summary = "; ".join(sorted({label for label, _ in private}))
+    if visibility == "PUBLIC":
+        return "deny", ("Anti-filtraciones: el repo destino es público y el texto contiene {0}. "
+                        "Quita hosts, IPs, usuarios y rutas de servidores (o pon el dato en el repo privado de runbooks).").format(summary)
+    if visibility is None:
+        return "ask", ("Anti-filtraciones: el texto contiene {0} y no se pudo comprobar si el repo destino es público "
+                       "(`gh repo view --json visibility`). ¿Seguro que es privado?").format(summary)
+    return None
+
+
 def main():
     deadline = time.monotonic() + TIMEOUT
     data = json.load(sys.stdin)
     tool_input = data.get("tool_input") or {}
     command = tool_input.get("command") or ""
+    cwd = data.get("cwd") or os.getcwd()
+    github = github_text_check(command, cwd, deadline)
+    if github:
+        emit(*github)
+        return
     commit = bool(re.search(r"\bgit\s+commit\b", command))
     push = bool(re.search(r"\bgit\s+push\b", command))
     if not commit and not push:
         return
-    cwd = data.get("cwd") or os.getcwd()
     root = repository_root(cwd, deadline)
     allowed_paths = load_allowed_paths(root)
     findings = []
