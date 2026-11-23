@@ -13,6 +13,7 @@ nunca se reescribe una existente. Una línea = un registro JSON con `v` (versió
 Pendiente = `idea` sin ningún `resuelta` con el mismo `hash`. Los lectores ignoran líneas rotas y
 registros con `v` desconocido o `tipo` desconocido. Documentación completa: README, «Cola de ideas».
 """
+import contextlib
 import datetime
 import json
 import os
@@ -31,17 +32,35 @@ def ahora():
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+@contextlib.contextmanager
+def bloqueo():
+    """Exclusión mutua entre hooks y `compactar` (flock sobre cola.lock; sin él, se sigue sin bloquear)."""
+    carpeta = os.path.dirname(ruta_cola())
+    os.makedirs(carpeta, mode=0o700, exist_ok=True)
+    fd = os.open(os.path.join(carpeta, "cola.lock"), os.O_WRONLY | os.O_CREAT, 0o600)
+    try:
+        try:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        except (ImportError, OSError):
+            pass
+        yield
+    finally:
+        os.close(fd)
+
+
 def añadir(registro):
     registro = dict(registro, v=VERSION, fecha=registro.get("fecha") or ahora())
     ruta = ruta_cola()
     carpeta = os.path.dirname(ruta)
     os.makedirs(carpeta, mode=0o700, exist_ok=True)
-    fd = os.open(ruta, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-    try:
-        os.fchmod(fd, 0o600)
-        os.write(fd, (json.dumps(registro, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
-    finally:
-        os.close(fd)
+    with bloqueo():
+        fd = os.open(ruta, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.fchmod(fd, 0o600)
+            os.write(fd, (json.dumps(registro, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
 
 
 def leer():

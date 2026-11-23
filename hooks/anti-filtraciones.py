@@ -388,8 +388,8 @@ def github_text_check(command, cwd, deadline):
     """Cuerpos de gh issue/pr: secretos siempre; hosts, IPs, usuarios y rutas si el repo destino es público."""
     if not GH_RE.search(command):
         return None
-    text = active_text([command] + read_body_files(command, cwd))
-    secrets = redaccion.buscar_secretos(text)
+    text = active_text([BODY_FILE_RE.sub(" ", GH_REPO_RE.sub(" ", command))] + read_body_files(command, cwd))
+    secrets = redaccion.buscar_secretos(text)  # (la ruta de --body-file y el valor de -R no se revisan; el fichero sí)
     if secrets:
         label, value = secrets[0]
         return "deny", "Anti-filtraciones: el texto del issue o PR contiene {0} (prefijo «{1}»){2}. Quítalo y reescribe el texto.".format(

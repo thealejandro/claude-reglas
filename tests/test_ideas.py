@@ -50,6 +50,27 @@ class IdeasTests(Base):
                 self.assertEqual(salida['hookSpecificOutput']['hookEventName'], 'UserPromptSubmit')
                 self.assertEqual(self.registros()[-1]['categoria'], categoria)
 
+    def test_debería_singular(self):
+        self.captura('Debería poder exportar a CSV')
+        self.assertEqual(self.registros()[0]['categoria'], 'idea')
+
+    def test_no_captura_citas_codigo_ni_terminal(self):
+        casos = ['> Queda pendiente de merge.\n\nVale', '> hay un bug\n> más adelante lo vemos\nVale, sigue',
+                 'Mira:\n```\nbug en la línea 3\n```\nGracias', 'Mira:\n```\nbug sin cerrar',
+                 'usuario@equipo:~$ make test\nFAIL: bug en el test\n\nOk',
+                 '$ ./probar\nhay un bug aquí\n\nVale']
+        for prompt in casos:
+            with self.subTest(prompt=prompt):
+                self.assertIsNone(self.captura(prompt))
+        self.assertFalse(self.cola.exists())
+
+    def test_captura_lo_propio_junto_a_cita_y_codigo(self):
+        self.captura('> pendiente de merge\n\nHabría que añadir un filtro\n```\nbug\n```')
+        (r,) = self.registros()
+        self.assertEqual(r['categoria'], 'idea')
+        self.assertNotIn('merge', r['extracto'])
+        self.assertNotIn('bug', r['extracto'])
+
     def test_sin_marcador_no_hace_nada(self):
         self.assertIsNone(self.captura('Arregla el test que falla en CI, gracias'))
         self.assertFalse(self.cola.exists())

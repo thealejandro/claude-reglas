@@ -81,6 +81,8 @@ También se ejecuta cuando el comando contiene `gh issue create|comment|edit` o 
 - Hosts propios: un host o fragmento por línea en `~/.config/reglas/hosts-privados` (fuera del repo) se tratan como privados.
 - `reglas:permitir` en la misma línea del texto lo exceptúa.
 
+Límite: `gh api …/issues -f body=…` no pasa por esta revisión.
+
 Los mismos controles corren como hooks de git para cualquier agente (ver «Reglas y hooks para Codex, Kimi y Cursor»).
 
 Si `gitleaks` está instalado se ejecuta como revisión adicional; si no, basta la revisión propia. El hook tiene un límite interno total de 5 segundos y, ante un fallo propio, deja continuar la operación con un aviso en lugar de bloquear por error.
@@ -91,14 +93,14 @@ Las pruebas usan repositorios Git temporales y se ejecutan con `python3 -m unitt
 
 La regla «cada idea es un issue» solo en texto se pierde en sesiones largas o al compactar. Cuatro piezas, las tres primeras sin modelo, sin red y sin coste de tokens:
 
-- **`UserPromptSubmit` → `hooks/ideas-captura.py`.** Busca marcadores («habría que», «estaría bien», «más adelante», «también quiero», «idea:», «deberíamos», «bug», «pendiente»…). Si acierta, añade una entrada a la cola con un extracto de hasta 500 caracteres **ya redactado** (secretos, IPs, hosts, usuarios y rutas sustituidos por `[secreto]`, `[ip]`, `[host]`, `[usuario@host]`, `[ruta]`) y devuelve una línea de `additionalContext`. Ignora los comandos `/…`. Trabajo propio ≈ 15 ms sobre el arranque de Python.
+- **`UserPromptSubmit` → `hooks/ideas-captura.py`.** Busca marcadores («habría que», «estaría bien», «más adelante», «también quiero», «idea:», «deberíamos», «bug», «pendiente»…). Si acierta, añade una entrada a la cola con un extracto de hasta 500 caracteres **ya redactado** (secretos, IPs, hosts, usuarios y rutas sustituidos por `[secreto]`, `[ip]`, `[host]`, `[usuario@host]`, `[ruta]`) y devuelve una línea de `additionalContext`. Ignora los comandos `/…` y no mira citas `> …`, bloques de código ni salida de terminal pegada. Trabajo propio ≈ 15 ms sobre el arranque de Python.
 - **`Stop` → `hooks/ideas-stop.py`.** Si la sesión tiene ideas sin resolver, bloquea **una sola vez** con la lista. Guardas: `stop_hook_active` y un registro `aviso` en la cola.
 - **`SessionStart` → `hooks/ideas-inicio.py`.** Reinyecta «N ideas en cola» (también tras compactar).
 - **Skill `/ideas`.** Procesa la cola por lotes con un subagente Haiku por repo: dedupe contra issues abiertos y los cerrados en 30 días, comenta en el existente si «amplía», crea con la etiqueta `idea-auto` y un tope diario por repo (5, `IDEAS_TOPE_DIARIO`), y pide confirmación en repos públicos, casos dudosos, proyectos clínicos y decisiones. El issue es siempre una redacción nueva, nunca el prompt.
 
 ### Formato de la cola (v1, estable)
 
-`~/.local/state/cabo/ideas/cola.jsonl`, carpeta 700 y fichero 600. Una línea JSON por registro; **solo se añaden líneas** (`/ideas compactar` es la única reescritura: borra lo resuelto hace más de 30 días). Todo registro lleva `v` (1), `tipo` y `fecha` (UTC, `AAAA-MM-DDThh:mm:ssZ`). Quien lea debe ignorar líneas rotas y registros con `v` o `tipo` desconocidos, y los campos nuevos que no conozca.
+`~/.local/state/cabo/ideas/cola.jsonl`, carpeta 700 y fichero 600. Una línea JSON por registro; **solo se añaden líneas** (`cola.py compactar` es la única reescritura: borra lo resuelto hace más de 30 días; hooks y `compactar` se coordinan con `flock` sobre `cola.lock`, así que un lector externo no debe reescribir el fichero). Todo registro lleva `v` (1), `tipo` y `fecha` (UTC, `AAAA-MM-DDThh:mm:ssZ`). Quien lea debe ignorar líneas rotas y registros con `v` o `tipo` desconocidos, y los campos nuevos que no conozca.
 
 | `tipo` | Campos | Significado |
 |---|---|---|

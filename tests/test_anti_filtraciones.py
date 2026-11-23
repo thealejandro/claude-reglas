@@ -379,6 +379,15 @@ class AntiFiltracionesGhTests(unittest.TestCase):
         self.assertIsNone(self.run_hook("gh pr view 3 --json body"))
         self.assertIsNone(self.run_hook("echo 10.0.0.5"))
 
+    def test_ruta_de_body_file_y_repo_no_se_revisan_como_texto(self):
+        ruta = self.home / "x.md"
+        ruta.write_text("Cuerpo limpio\n")
+        self.assertIsNone(self.run_hook("gh issue create --title t --body-file {0}".format(ruta)))
+        self.assertIsNone(self.run_hook("gh pr create -F '{0}'".format(ruta)))
+        self.assertIsNone(self.run_hook("gh issue create -R acme/web --title t --body 'limpio'"))
+        ruta.write_text("IP 10.0.0.5\n")  # el contenido sí se revisa
+        self.assertEqual(self.run_hook("gh issue create --title t --body-file {0}".format(ruta))["permissionDecision"], "deny")
+
     def test_hosts_propios_del_usuario(self):
         carpeta = self.home / ".config" / "reglas"
         carpeta.mkdir(parents=True)

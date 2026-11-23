@@ -18,6 +18,20 @@ import ideas_cola  # noqa: E402
 
 TOPE = int(os.environ.get("IDEAS_TOPE_DIARIO", "5") or 5)
 
+def compactar():
+    registros = ideas_cola.leer()
+    limite = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    viejas = {r["hash"] for r in registros if r["tipo"] == "resuelta" and str(r.get("fecha", "")) < limite and r.get("hash")}
+    quedan = [r for r in registros if r.get("hash") not in viejas and not (r["tipo"] == "aviso" and str(r.get("fecha", "")) < limite)]
+    ruta = ideas_cola.ruta_cola()
+    tmp = ruta + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        for r in quedan:
+            f.write(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n")
+    os.replace(tmp, ruta)
+    print(json.dumps({"antes": len(registros), "despues": len(quedan)}))
+
 
 def main():
     p = argparse.ArgumentParser()
@@ -50,17 +64,8 @@ def main():
                 and str(r.get("fecha", "")).startswith(hoy) and str(r.get("issue", "")).startswith(args.repo + "#"))
         print(json.dumps({"repo": args.repo, "creados_hoy": n, "tope": TOPE, "queda": max(0, TOPE - n)}))
     elif args.orden == "compactar":
-        limite = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        viejas = {r["hash"] for r in registros if r["tipo"] == "resuelta" and str(r.get("fecha", "")) < limite and r.get("hash")}
-        quedan = [r for r in registros if r.get("hash") not in viejas and not (r["tipo"] == "aviso" and str(r.get("fecha", "")) < limite)]
-        ruta = ideas_cola.ruta_cola()
-        tmp = ruta + ".tmp"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            for r in quedan:
-                f.write(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n")
-        os.replace(tmp, ruta)
-        print(json.dumps({"antes": len(registros), "despues": len(quedan)}))
+        with ideas_cola.bloqueo():
+            compactar()
 
 
 if __name__ == "__main__":

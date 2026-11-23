@@ -17,10 +17,27 @@ import redaccion  # noqa: E402
 BUG = re.compile(r"\bbugs?\b", re.IGNORECASE)
 PENDIENTE = re.compile(r"\bpendientes?\b|\bno (?:se )?(?:nos )?olvid(?:es|e|emos)\b|\btodo:", re.IGNORECASE)
 IDEA = re.compile(
-    r"habr[ií]a que|estar[ií]a bien|m[aá]s adelante|tambi[eé]n quiero|\bidea:|deber[ií]amos|se me ocurre|alg[uú]n d[ií]a|ojal[aá]",
+    r"habr[ií]a que|estar[ií]a bien|m[aá]s adelante|tambi[eé]n quiero|\bidea:|deber[ií]amos|deber[ií]a\b|se me ocurre|alg[uú]n d[ií]a|ojal[aá]",
     re.IGNORECASE,
 )
 ATRAS = 200
+BLOQUE = re.compile(r"```.*?(?:```|\Z)", re.DOTALL)
+PROMPT_TERMINAL = re.compile(r"^\s*(?:\$ |[\w.-]+@[\w.-]+:\S*[$#] )")
+
+
+def limpiar(prompt):
+    """Quita lo que no es del usuario: bloques de código, citas «> » y salida de terminal pegada."""
+    salida = []
+    en_terminal = False
+    for linea in BLOQUE.sub("\n", prompt).splitlines():
+        if not linea.strip():
+            en_terminal = False
+        elif PROMPT_TERMINAL.match(linea):
+            en_terminal = True
+        if en_terminal or linea.lstrip().startswith(">"):
+            continue
+        salida.append(linea)
+    return "\n".join(salida)
 
 
 def categoria(texto):
@@ -48,6 +65,7 @@ def main():
     inicio = prompt.lstrip()
     if inicio.startswith(("/", "<")):  # comandos y mensajes del sistema, no ideas del usuario
         return
+    prompt = limpiar(prompt)
     nombre, pos = categoria(prompt)
     if not nombre:
         return
