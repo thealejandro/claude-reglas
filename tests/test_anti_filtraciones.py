@@ -287,5 +287,114 @@ class AntiFiltracionesTests(unittest.TestCase):
         self.assertIn("se permite la operación", output["permissionDecisionReason"])
 
 
+class AntiFiltracionesGhTests(unittest.TestCase):
+    """#72: cuerpos de gh issue/pr. Un `gh` falso responde a `gh repo view --json visibility`."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.base = Path(self.temporary.name)
+        self.home = self.base / "home"
+        self.home.mkdir()
+        self.bin = self.base / "bin"
+        self.bin.mkdir()
+        self.cwd = self.base / "trabajo"
+        self.cwd.mkdir()
+        self.visibility("PUBLIC")
+
+    def visibility(self, value):
+        gh = self.bin / "gh"
+        if value is None:
+            gh.write_text("#!/bin/sh\nexit 1\n")
+        else:
+            gh.write_text("#!/bin/sh\necho {0}\n".format(value))
+        gh.chmod(0o755)
+
+    def run_hook(self, command):
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                   "tool_input": {"command": command}, "cwd": str(self.cwd)}
+        result = subprocess.run(
+            [sys.executable, "-I", str(HOOK)], input=json.dumps(payload), cwd=self.cwd,
+            env={"PATH": str(self.bin), "HOME": str(self.home)}, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            encoding="utf-8", timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)["hookSpecificOutput"] if result.stdout.strip() else None
+
+    def test_secreto_en_cuerpo_se_bloquea_aunque_el_repo_sea_privado(self):
+        self.visibility("PRIVATE")
+        for comando in ("gh issue create --title t --body 'token ghp_abcdefgh12345678'",
+                        "gh pr comment 3 --body 'AKIAABCDEFGHIJKLMNOP'",
+                        "gh issue comment 3 -b \"clave sk-ant-abcdefgh1234\""):
+            with self.subTest(comando=comando):
+                salida = self.run_hook(comando)
+                self.assertEqual(salida["permissionDecision"], "deny")
+                self.assertNotIn("abcdefgh12345678", salida["permissionDecisionReason"])
+
+    def test_secreto_en_body_file(self):
+        self.visibility("PRIVATE")
+        (self.cwd / "cuerpo.md").write_text("hola\ntoken ghp_abcdefgh12345678\n")
+        for comando in ("gh issue create --title t --body-file cuerpo.md", "gh pr create -F cuerpo.md",
+                        "gh pr create --body-file=cuerpo.md", "gh issue create --body-file './cuerpo.md'"):
+            with self.subTest(comando=comando):
+                self.assertEqual(self.run_hook(comando)["permissionDecision"], "deny")
+
+    def test_cuerpo_con_heredoc(self):
+        comando = "gh pr create --title t --body \"$(cat <<'EOF'\nServidor 192.168.1.20\nEOF\n)\""
+        self.assertEqual(self.run_hook(comando)["permissionDecision"], "deny")
+
+    def test_privados_en_repo_publico(self):
+        for texto in ("falla en 10.0.0.5", "el host nas.tailnet.ts.net", "ruta /home/dev/app", "ruta /srv/web",
+                      "ssh deploy@servidor.example.com", "dirección fd00:1234:5678:9abc::1", "equipo caja.local"):
+            for verbo in ("gh issue create --title t --body", "gh pr comment 4 -b", "gh issue comment 2 --body",
+                          "gh pr create --body"):
+                with self.subTest(texto=texto, verbo=verbo):
+                    salida = self.run_hook("{0} '{1}'".format(verbo, texto))
+                    self.assertEqual(salida["permissionDecision"], "deny")
+                    self.assertIn("público", salida["permissionDecisionReason"])
+
+    def test_privados_en_body_file_de_repo_publico(self):
+        (self.cwd / "c.md").write_text("Servidor 10.20.30.40\n")
+        self.assertEqual(self.run_hook("gh issue create --title t --body-file c.md")["permissionDecision"], "deny")
+
+    def test_privados_permitidos_en_repo_privado(self):
+        self.visibility("PRIVATE")
+        self.assertIsNone(self.run_hook("gh issue create --title t --body 'falla en 10.0.0.5 y /home/dev/app'"))
+
+    def test_visibilidad_desconocida_pregunta(self):
+        self.visibility(None)
+        salida = self.run_hook("gh issue create --title t --body 'falla en 10.0.0.5'")
+        self.assertEqual(salida["permissionDecision"], "ask")
+
+    def test_texto_normal_pasa_sin_consultar_gh(self):
+        self.visibility(None)
+        self.assertIsNone(self.run_hook("gh issue create --title 'Añadir filtro' --body 'Versión 1.2.3, puerto 8080, 127.0.0.1'"))
+
+    def test_marca_permitir_por_linea(self):
+        (self.cwd / "c.md").write_text("Servidor 10.20.30.40 reglas:permitir\n")
+        self.assertIsNone(self.run_hook("gh issue create --title t --body-file c.md"))
+
+    def test_repo_explicito_y_otros_comandos_gh(self):
+        self.assertEqual(self.run_hook("gh issue create -R acme/web --title t --body 'IP 10.0.0.5'")["permissionDecision"], "deny")
+        self.assertIsNone(self.run_hook("gh issue list --search 'IP 10.0.0.5'"))
+        self.assertIsNone(self.run_hook("gh pr view 3 --json body"))
+        self.assertIsNone(self.run_hook("echo 10.0.0.5"))
+
+    def test_ruta_de_body_file_y_repo_no_se_revisan_como_texto(self):
+        ruta = self.home / "x.md"
+        ruta.write_text("Cuerpo limpio\n")
+        self.assertIsNone(self.run_hook("gh issue create --title t --body-file {0}".format(ruta)))
+        self.assertIsNone(self.run_hook("gh pr create -F '{0}'".format(ruta)))
+        self.assertIsNone(self.run_hook("gh issue create -R acme/web --title t --body 'limpio'"))
+        ruta.write_text("IP 10.0.0.5\n")  # el contenido sí se revisa
+        self.assertEqual(self.run_hook("gh issue create --title t --body-file {0}".format(ruta))["permissionDecision"], "deny")
+
+    def test_hosts_propios_del_usuario(self):
+        carpeta = self.home / ".config" / "reglas"
+        carpeta.mkdir(parents=True)
+        (carpeta / "hosts-privados").write_text("# mis equipos\nminas-del-norte\n")
+        salida = self.run_hook("gh issue create --title t --body 'caído minas-del-norte'")
+        self.assertEqual(salida["permissionDecision"], "deny")
+
+
 if __name__ == "__main__":
     unittest.main()

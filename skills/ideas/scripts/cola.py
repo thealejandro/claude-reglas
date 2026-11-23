@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Ayudante de la skill /ideas para la cola local (formato v1 documentado en hooks/ideas_cola.py).
+
+  cola.py pendientes [--sesion ID] [--repo owner/repo]   JSON con las ideas pendientes
+  cola.py resolver HASH ESTADO [--issue owner/repo#N]    ESTADO: creada|comentada|duplicada|descartada
+  cola.py aplazar HASH --motivo TEXTO                    sigue pendiente
+  cola.py hoy owner/repo                                 issues creados hoy (UTC) en ese repo y tope diario
+  cola.py compactar                                      borra ideas resueltas hace más de 30 días
+"""
+import argparse
+import datetime
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "hooks"))
+import ideas_cola  # noqa: E402
+
+TOPE = int(os.environ.get("IDEAS_TOPE_DIARIO", "5") or 5)
+
+def compactar():
+    registros = ideas_cola.leer()
+    limite = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    viejas = {r["hash"] for r in registros if r["tipo"] == "resuelta" and str(r.get("fecha", "")) < limite and r.get("hash")}
+    quedan = [r for r in registros if r.get("hash") not in viejas and not (r["tipo"] == "aviso" and str(r.get("fecha", "")) < limite)]
+    ruta = ideas_cola.ruta_cola()
+    tmp = ruta + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        for r in quedan:
+            f.write(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n")
+    os.replace(tmp, ruta)
+    print(json.dumps({"antes": len(registros), "despues": len(quedan)}))
+
+
+def main():
+    p = argparse.ArgumentParser()
+    sub = p.add_subparsers(dest="orden", required=True)
+    a = sub.add_parser("pendientes"); a.add_argument("--sesion"); a.add_argument("--repo")
+    a = sub.add_parser("resolver"); a.add_argument("hash"); a.add_argument("estado", choices=ideas_cola.ESTADOS_RESUELTA); a.add_argument("--issue")
+    a = sub.add_parser("aplazar"); a.add_argument("hash"); a.add_argument("--motivo", required=True)
+    a = sub.add_parser("hoy"); a.add_argument("repo")
+    sub.add_parser("compactar")
+    args = p.parse_args()
+    registros = ideas_cola.leer()
+    if args.orden == "pendientes":
+        lista = ideas_cola.pendientes(registros, args.sesion)
+        if args.repo:
+            lista = [r for r in lista if r.get("remoto") == args.repo]
+        print(json.dumps(lista, ensure_ascii=False, indent=1))
+    elif args.orden == "resolver":
+        conocidos = {r.get("hash") for r in registros if r["tipo"] == "idea"}
+        if args.hash not in conocidos:
+            sys.exit("hash desconocido: " + args.hash)
+        reg = {"tipo": "resuelta", "hash": args.hash, "estado": args.estado}
+        if args.issue:
+            reg["issue"] = args.issue
+        ideas_cola.añadir(reg)
+    elif args.orden == "aplazar":
+        ideas_cola.añadir({"tipo": "aplazada", "hash": args.hash, "motivo": args.motivo[:200]})
+    elif args.orden == "hoy":
+        hoy = ideas_cola.ahora()[:10]
+        n = sum(1 for r in registros if r["tipo"] == "resuelta" and r.get("estado") == "creada"
+                and str(r.get("fecha", "")).startswith(hoy) and str(r.get("issue", "")).startswith(args.repo + "#"))
+        print(json.dumps({"repo": args.repo, "creados_hoy": n, "tope": TOPE, "queda": max(0, TOPE - n)}))
+    elif args.orden == "compactar":
+        with ideas_cola.bloqueo():
+            compactar()
+
+
+if __name__ == "__main__":
+    main()
