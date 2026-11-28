@@ -20,7 +20,12 @@ sys.path[:0] = [AQUI, os.path.join(AQUI, "..", "..", "..", "hooks")]
 import destinos  # noqa: E402
 import ideas_cola  # noqa: E402
 
-TOPE = int(os.environ.get("IDEAS_TOPE_DIARIO", "5") or 5)
+def tope_diario():
+    try:
+        return int(os.environ.get("IDEAS_TOPE_DIARIO", ""))
+    except ValueError:  # sin definir, vacío o no es un número: el tope por defecto
+        return 5
+
 
 def compactar():
     registros = ideas_cola.leer()
@@ -85,7 +90,8 @@ def main():
         n = sum(1 for r in registros if r["tipo"] == "resuelta" and r.get("estado") == "creada"
                 and str(r.get("fecha", "")).startswith(hoy)
                 and str(r.get("issue", "")).lower().startswith(args.repo.lower() + "#"))
-        print(json.dumps({"repo": args.repo, "creados_hoy": n, "tope": TOPE, "queda": max(0, TOPE - n)}))
+        tope = tope_diario()
+        print(json.dumps({"repo": args.repo, "creados_hoy": n, "tope": tope, "queda": max(0, tope - n)}))
     elif args.orden == "compactar":
         with ideas_cola.bloqueo():
             compactar()
