@@ -63,7 +63,13 @@ Para subir una versión: revisar el diff del repo entre el `sha` actual y el nue
 
 ## Hook `anti-filtraciones`
 
-Se ejecuta como `PreToolUse` sobre `Bash`, solo cuando el comando contiene `git commit` o `git push`. En un commit revisa el diff del índice; en un push revisa los commits pendientes respecto a `@{u}`, si la rama tiene upstream.
+Se ejecuta como `PreToolUse` sobre `Bash`, cuando el comando hace `git commit` o `git push`. Lee el comando sin ejecutarlo (`hooks/comandos.py`) para saber en qué carpeta actúa cada orden (`cd`, `pushd`, `git -C`, `--git-dir`/`--work-tree`, subshells, `bash -c`) y qué va a guardar o subir (1.20.1):
+
+- **Commit:** el diff del índice; con `-a`, `-i`, `-p` o rutas, además los cambios sin preparar que incluiría (con rutas sin `-i`, solo esas). Si el mismo comando hace antes `git add`, también lo que ese `add` metería, ficheros nuevos incluidos. Lo que el comando escribe antes (redirecciones, `tee`) y luego guarda se revisa a partir del propio texto.
+- **Push:** los commits de lo que se sube (rama actual, refspecs, `--all`, `--tags`) que el remoto destino todavía no tiene (`--not --remotes=<remoto>`). Una rama nueva sin upstream se revisa igual; si no hay refs de ese remoto (remoto nuevo, una URL o un repo sin nada publicado), se revisa toda la historia de lo que se sube.
+- **`cd` que quizá no ocurra** (tras `&&`, o dentro de `if`, bucles, `case` o funciones): se revisan todas las carpetas en las que puede acabar actuando git.
+- **Pide confirmación** si no puede saber qué revisar: carpeta o rama que dependen de una variable o de un `$(…)` que no sabe resolver, repo que el propio comando crea o clona, o una revisión que no cabe en el tiempo disponible. Cuando no sabe la carpeta, revisa además la de la sesión y, si allí hay un hallazgo, bloquea.
+- En las formas distintas de `git commit`/`git push` literales (`git -C …`), un fallo o un aviso del hook no emite «permitir»: sigue la confirmación normal de Claude Code. En una carpeta sin repositorio no decide nada.
 
 Bloquea claves privadas y tokens habituales (GitHub, AWS, Slack, Stripe, Anthropic y OpenAI), JWT, asignaciones de contraseñas o claves, archivos `.env` (salvo `.env.example`), claves privadas y SSH, contenido de `_muestras/`, XML de factura FEL y DPI de Guatemala. El motivo del bloqueo indica archivo y línea, y como máximo los primeros cuatro caracteres del hallazgo, nunca el valor completo.
 
@@ -74,20 +80,21 @@ Hay dos formas de declarar una excepción:
 
 ### Cuerpos de `gh issue` y `gh pr` (1.19.0)
 
-También se ejecuta cuando el comando contiene `gh issue create|comment|edit` o `gh pr create|comment|edit|review`. Revisa el texto del comando (`--body`, `-b`, heredocs) y los ficheros de `--body-file`/`-F` (no puede leer `-`, la entrada estándar; un heredoc sí va en el comando):
+También se ejecuta cuando el comando hace `gh issue create|comment|edit` o `gh pr create|comment|edit|review`. Revisa el texto del comando y lo que consigue leer del título y del cuerpo (1.20.1): `--body`/`-b`, heredocs, `--body-file`/`-F`, la entrada estándar (`-`) cuando viene de un heredoc, una redirección o una tubería de `cat`, `echo` o `printf`, y `$(cat fichero)`:
 
 - **Secretos** (los mismos de arriba): se deniega siempre, sea público o privado el repo.
-- **Hosts internos** (`.ts.net`, `.local`, `.lan`, `.internal`…), **IPs** (IPv4 salvo loopback, e IPv6), **`usuario@host`** y **rutas de servidor o de usuario** (`/home/…`, `/Users/…`, `/root`, `/srv`, `/var/log`…): se deniega si el repo destino es público. El destino es `-R/--repo` o, si falta, el repo de la carpeta actual; la visibilidad sale de `gh repo view --json visibility`. Si no se puede comprobar, **pregunta** en lugar de decidir.
+- **Hosts internos** (`.ts.net`, `.local`, `.lan`, `.internal`…), **IPs** (IPv4 salvo loopback, e IPv6), **`usuario@host`** y **rutas de servidor o de usuario** (`/home/…`, `/Users/…`, `/root`, `/srv`, `/var/log`…): se deniega si el repo destino es público. El destino de cada `gh` del comando es la URL del issue o PR, `-R/--repo`, `GH_REPO` o, si faltan, el repo de la carpeta en la que se ejecuta (si puede ser varias, basta con que una sea pública); la visibilidad sale de `gh repo view --json visibility`. Si no se puede comprobar, **pregunta** en lugar de decidir.
+- **Título o cuerpo que no se puede leer** de antemano (la salida de otro programa, una variable sin definir): **pregunta** si el repo destino es público o no se sabe.
 - Hosts propios: un host o fragmento por línea en `~/.config/reglas/hosts-privados` (fuera del repo) se tratan como privados.
 - `reglas:permitir` en la misma línea del texto lo exceptúa.
 
 Si el mismo comando hace además `git commit` o `git push`, se revisan las dos cosas: un «preguntar» sobre el texto de `gh` no exime del diff (1.20.0).
 
-Límite: `gh api …/issues -f body=…` no pasa por esta revisión.
+Límites: `gh api …/issues -f body=…` no pasa por esta revisión, y la lectura del comando no cubre todo lo que puede hacer un shell (alias, scripts, órdenes remotas). Es una red para descuidos, no una barrera frente a quien quiera saltársela.
 
 Los mismos controles corren como hooks de git para cualquier agente (ver «Reglas y hooks para Codex, Kimi y Cursor»).
 
-Si `gitleaks` está instalado se ejecuta como revisión adicional; si no, basta la revisión propia. El hook tiene un límite interno total de 5 segundos y, ante un fallo propio, deja continuar la operación con un aviso en lugar de bloquear por error.
+Si `gitleaks` está instalado se ejecuta como revisión adicional; si no, basta la revisión propia. El hook tiene un límite interno total de 5 segundos y, ante un fallo propio (por ejemplo, que no haya `git`), deja continuar la operación con un aviso en lugar de bloquear por error.
 
 Las pruebas usan repositorios Git temporales y se ejecutan con `python3 -m unittest discover tests`.
 
