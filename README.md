@@ -9,7 +9,7 @@ Incluye:
 - Skill `desplegar`: resumen de producción como comentario en la PR, aviso a la sesión del servidor y despliegue solo con el OK del usuario.
 - Hook `jev-router`: Jev elige modelo y effort de cada subagente; los `Plan` van con Fable.
 - Hook `anti-filtraciones`: bloquea commits y pushes con secretos, archivos sensibles o datos reales, y los cuerpos de `gh issue`/`gh pr` con secretos o, hacia repos públicos, con hosts, IPs, usuarios y rutas de servidores.
-- Captura de ideas (1.19.0): hooks sin modelo que anotan ideas, bugs y pendientes en una cola local, y skill `/ideas` que la convierte en issues.
+- Captura de ideas (1.19.0): hooks sin modelo que anotan ideas, bugs y pendientes en una cola local, y skill `/ideas` que la convierte en issues en el repo que corresponde (1.20.0).
 - `scripts/ajustes.py`: ajustes que un plugin no puede fijar (atribución vacía, también sin enlace de sesión, confirmación para producción, autocompact 200K), el `AGENTS.md` de Codex, Kimi y Cursor y los hooks de git globales.
 
 ## Configuración
@@ -81,6 +81,8 @@ También se ejecuta cuando el comando contiene `gh issue create|comment|edit` o 
 - Hosts propios: un host o fragmento por línea en `~/.config/reglas/hosts-privados` (fuera del repo) se tratan como privados.
 - `reglas:permitir` en la misma línea del texto lo exceptúa.
 
+Si el mismo comando hace además `git commit` o `git push`, se revisan las dos cosas: un «preguntar» sobre el texto de `gh` no exime del diff (1.20.0).
+
 Límite: `gh api …/issues -f body=…` no pasa por esta revisión.
 
 Los mismos controles corren como hooks de git para cualquier agente (ver «Reglas y hooks para Codex, Kimi y Cursor»).
@@ -96,7 +98,31 @@ La regla «cada idea es un issue» solo en texto se pierde en sesiones largas o 
 - **`UserPromptSubmit` → `hooks/ideas-captura.py`.** Busca marcadores («habría que», «estaría bien», «más adelante», «también quiero», «idea:», «deberíamos», «bug», «pendiente»…). Si acierta, añade una entrada a la cola con un extracto de hasta 500 caracteres **ya redactado** (secretos, IPs, hosts, usuarios y rutas sustituidos por `[secreto]`, `[ip]`, `[host]`, `[usuario@host]`, `[ruta]`) y devuelve una línea de `additionalContext`. Ignora los comandos `/…` y no mira citas `> …`, bloques de código ni salida de terminal pegada. Trabajo propio ≈ 15 ms sobre el arranque de Python.
 - **`Stop` → `hooks/ideas-stop.py`.** Si la sesión tiene ideas sin resolver, bloquea **una sola vez** con la lista. Guardas: `stop_hook_active` y un registro `aviso` en la cola.
 - **`SessionStart` → `hooks/ideas-inicio.py`.** Reinyecta «N ideas en cola» (también tras compactar).
-- **Skill `/ideas`.** Procesa la cola por lotes con un subagente Haiku por repo: dedupe contra issues abiertos y los cerrados en 30 días, comenta en el existente si «amplía», crea con la etiqueta `idea-auto` y un tope diario por repo (5, `IDEAS_TOPE_DIARIO`), y pide confirmación en repos públicos, casos dudosos, proyectos clínicos y decisiones. El issue es siempre una redacción nueva, nunca el prompt.
+- **Skill `/ideas`.** Procesa la cola: calcula el repo destino de cada idea, un subagente Haiku de solo lectura (`reglas:ideas-redactor`) redacta el issue, busca duplicados, comenta en el existente si «amplía» y crea con la etiqueta `idea-auto` y un tope diario por repo (5, `IDEAS_TOPE_DIARIO`). El issue es siempre una redacción nueva, nunca el prompt.
+
+### Destino, duplicados y confirmaciones (1.20.0)
+
+Lo calcula `skills/ideas/scripts/cola.py` (órdenes `destino` y `similares`), no el modelo. Quien publica sigue siendo la sesión, con `gh` a la vista (lo revisa `anti-filtraciones`): respetar el resultado, las confirmaciones y el tope diario son instrucciones de la skill, no un bloqueo en código.
+
+**Destino**, el primero que esté permitido: repo o alias citado en la idea (`owner/repo#N`, URL de GitHub) → remoto git de la carpeta → `repo` del `.cabo.toml` (clave raíz, `repo = "owner/repo"`, sin salir del repositorio) → repo de runbooks si la idea habla de datos de servidores → ninguno: queda en borrador.
+
+**Repos permitidos:** los de `repos` en la configuración; sin esa lista, solo los repos en los que eres administrador. El de runbooks vale además si puedes escribir en él. En un repo archivado, de terceros o fuera de la lista nunca se crea ni se comenta, y si `gh` no puede comprobarlo la idea se aplaza.
+
+Configuración opcional en `~/.config/reglas/ideas.json` (fuera de cualquier repo; si está mal escrita, no se procesa nada):
+
+```json
+{
+  "repos": ["mi-usuario/*", "mi-org/web"],
+  "runbooks": "mi-usuario/runbooks",
+  "alias": {"la web": "mi-org/web"}
+}
+```
+
+Sin `runbooks` se usa la opción `repo_runbooks` del plugin. Con `repos`, un `owner/repo` escrito sin `#N` también cuenta como cita si está en la lista.
+
+**Duplicados:** primero el `hash` de la cola. Después, `gh issue list --search` más los issues abiertos y los cerrados en 30 días (caché de 10 min en `~/.local/state/cabo/ideas/cache/`), comparados con `difflib`: casi idéntico a uno abierto → duplicada; sin parecidos ni resultados → nueva; en medio, o si el casi idéntico está cerrado, decide un Haiku (si amplía, comenta).
+
+**Pide confirmación** si el repo es público o no se sabe, si el destino o el duplicado son dudosos, si el proyecto es clínico, si el filtro redactó algo, y si es una decisión o afecta a producción. Los datos de servidores que irían a un repo público ofrecen como alternativa el de runbooks. En el resto crea directamente.
 
 ### Formato de la cola (v1, estable)
 
@@ -104,7 +130,7 @@ La regla «cada idea es un issue» solo en texto se pierde en sesiones largas o 
 
 | `tipo` | Campos | Significado |
 |---|---|---|
-| `idea` | `sesion`, `cwd` (redactado), `remoto` (`owner/repo`, o la URL sin credenciales; vacío si no hay), `categoria` (`idea`\|`bug`\|`pendiente`), `extracto` (≤ 500, redactado), `hash` (16 hex: sha-256 del extracto normalizado + `remoto`) | Entrada capturada. El mismo `hash` no se vuelve a añadir |
+| `idea` | `sesion`, `cwd` (redactado), `remoto` (`owner/repo`, o la URL sin credenciales; vacío si no hay), `categoria` (`idea`\|`bug`\|`pendiente`), `extracto` (≤ 500, redactado), `hash` (16 hex: sha-256 del extracto normalizado + `remoto`), `repo_cabo` (opcional, desde 1.20.0: el `repo` del `.cabo.toml`) | Entrada capturada. El mismo `hash` no se vuelve a añadir |
 | `resuelta` | `hash`, `estado` (`creada`\|`comentada`\|`duplicada`\|`descartada`), `issue` (`owner/repo#N`, opcional) | Cierra la idea con ese `hash` |
 | `aplazada` | `hash`, `motivo` | La idea sigue pendiente (cuota, tope diario…) |
 | `aviso` | `sesion` | El `Stop` ya bloqueó una vez en esa sesión |

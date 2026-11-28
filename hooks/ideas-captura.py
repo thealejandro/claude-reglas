@@ -77,10 +77,14 @@ def main():
     hash_ = hashlib.sha256(clave.encode("utf-8")).hexdigest()[:16]
     if any(r.get("hash") == hash_ for r in ideas_cola.leer() if r["tipo"] == "idea"):
         return
-    ideas_cola.añadir({
+    registro = {
         "tipo": "idea", "sesion": sesion, "cwd": redaccion.redactar(cwd), "remoto": remoto,
         "categoria": nombre, "extracto": texto, "hash": hash_,
-    })
+    }
+    repo_cabo = ideas_cola.repo_cabo(cwd)  # se lee ahora: el cwd de la cola queda redactado
+    if repo_cabo:
+        registro["repo_cabo"] = repo_cabo
+    ideas_cola.añadir(registro)
     pendientes = len(ideas_cola.pendientes(ideas_cola.leer()))
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "UserPromptSubmit",

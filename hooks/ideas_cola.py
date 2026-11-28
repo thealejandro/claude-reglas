@@ -4,7 +4,8 @@ Fichero: ~/.local/state/cabo/ideas/cola.jsonl (carpeta 700, fichero 600). Solo s
 nunca se reescribe una existente. Una línea = un registro JSON con `v` (versión) y `tipo`:
 
   idea      {"v":1,"tipo":"idea","fecha":ISO8601 UTC,"sesion":str,"cwd":str,"remoto":str,
-             "categoria":"idea"|"bug"|"pendiente","extracto":str<=500 ya redactado,"hash":16 hex}
+             "categoria":"idea"|"bug"|"pendiente","extracto":str<=500 ya redactado,"hash":16 hex,
+             "repo_cabo":"owner/repo" (opcional, del .cabo.toml)}
   resuelta  {"v":1,"tipo":"resuelta","fecha":...,"hash":...,"estado":"creada"|"comentada"|"duplicada"|"descartada",
              "issue":"owner/repo#N" (opcional)}
   aplazada  {"v":1,"tipo":"aplazada","fecha":...,"hash":...,"motivo":str}  (sigue pendiente)
@@ -85,6 +86,34 @@ def pendientes(registros, sesion=None):
     return [r for r in registros
             if r["tipo"] == "idea" and r.get("hash") not in resueltos
             and (sesion is None or r.get("sesion") == sesion)]
+
+
+def repo_cabo(cwd):
+    """`repo = "owner/repo"` del .cabo.toml más cercano, sin salir del repositorio git ni del home.
+
+    Un .cabo.toml de otro usuario (carpetas compartidas) se ignora.
+    """
+    try:
+        carpeta = os.path.abspath(cwd)
+        casa = os.path.expanduser("~")
+        for _ in range(40):
+            try:
+                with open(os.path.join(carpeta, ".cabo.toml"), encoding="utf-8", errors="replace") as f:
+                    ajeno = hasattr(os, "getuid") and os.fstat(f.fileno()).st_uid != os.getuid()
+                    texto = None if ajeno else f.read(65536)
+            except OSError:
+                texto = None
+            if texto is not None:  # solo claves de la raíz: antes de la primera [tabla]
+                raiz = re.split(r"(?m)^[ \t]*\[", texto)[0]
+                m = re.search(r"""(?m)^[ \t]*repo[ \t]*=[ \t]*(["'])([A-Za-z0-9][\w.-]*/[\w.-]+)\1""", raiz)
+                return m.group(2) if m else ""
+            padre = os.path.dirname(carpeta)
+            if padre == carpeta or carpeta == casa or os.path.exists(os.path.join(carpeta, ".git")):
+                break
+            carpeta = padre
+        return ""
+    except Exception:
+        return ""
 
 
 def remoto_de(cwd):
