@@ -173,11 +173,18 @@ class IdeasTests(Base):
 class ColaScriptTests(Base):
     SCRIPT = HOOKS.parent / 'skills/ideas/scripts/cola.py'
 
-    def cola_cmd(self, *args, ok=True):
+    def cola_cmd(self, *args, ok=True, entorno=None):
         r = subprocess.run([sys.executable, '-I', str(self.SCRIPT), *args], text=True, capture_output=True,
-                           timeout=10, env=dict(os.environ, HOME=str(self.home)))
+                           timeout=10, env=dict(os.environ, HOME=str(self.home), **(entorno or {})))
         self.assertEqual(r.returncode == 0, ok, r.stderr)
         return json.loads(r.stdout) if r.stdout.strip() else None
+
+    def test_tope_diario_no_numerico_usa_el_valor_por_defecto(self):
+        for valor, tope in (('cinco', 5), ('3.5', 5), ('', 5), ('  ', 5), (' 7 ', 7), ('0', 0)):
+            with self.subTest(valor=valor):
+                salida = self.cola_cmd('hoy', 'acme/web', entorno={'IDEAS_TOPE_DIARIO': valor})
+                self.assertEqual(salida['tope'], tope)
+        self.assertEqual(self.cola_cmd('pendientes', entorno={'IDEAS_TOPE_DIARIO': 'x'}), [])
 
     def test_flujo_pendientes_resolver_tope(self):
         self.captura('Habría que revisar esto', sesion='s1')
