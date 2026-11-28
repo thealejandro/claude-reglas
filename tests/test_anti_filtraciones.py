@@ -388,6 +388,34 @@ class AntiFiltracionesGhTests(unittest.TestCase):
         ruta.write_text("IP 10.0.0.5\n")  # el contenido sí se revisa
         self.assertEqual(self.run_hook("gh issue create --title t --body-file {0}".format(ruta))["permissionDecision"], "deny")
 
+    def preparar_commit(self, contenido):
+        """Repo git en la carpeta de trabajo con `contenido` en el índice."""
+        os.symlink(GIT, self.bin / "git")
+        subprocess.run([GIT, "init", "-q"], cwd=self.cwd, check=True)
+        (self.cwd / "nuevo.txt").write_text(contenido)
+        subprocess.run([GIT, "add", "nuevo.txt"], cwd=self.cwd, check=True)
+
+    @unittest.skipUnless(GIT, "Git es necesario")
+    def test_ask_de_gh_no_salta_la_revision_de_git(self):
+        self.visibility(None)
+        self.preparar_commit("valor = ghp_1234567890abcdef\n")  # reglas:permitir
+        salida = self.run_hook("git commit -m x && gh pr create --title t --body 'falla en 10.0.0.5'")
+        self.assertEqual(salida["permissionDecision"], "deny")
+        self.assertIn("nuevo.txt:", salida["permissionDecisionReason"])
+
+    @unittest.skipUnless(GIT, "Git es necesario")
+    def test_ask_de_gh_se_mantiene_con_git_limpio(self):
+        self.visibility(None)
+        self.preparar_commit("hola\n")
+        salida = self.run_hook("git commit -m x && gh pr create --title t --body 'falla en 10.0.0.5'")
+        self.assertEqual(salida["permissionDecision"], "ask")
+
+    def test_ask_de_gh_se_mantiene_si_git_falla(self):
+        self.visibility(None)  # sin git en el PATH: la revisión de git falla
+        salida = self.run_hook("git push && gh pr create --title t --body 'falla en 10.0.0.5'")
+        self.assertEqual(salida["permissionDecision"], "ask")
+        self.assertIn("parte de git", salida["permissionDecisionReason"])
+
     def test_hosts_propios_del_usuario(self):
         carpeta = self.home / ".config" / "reglas"
         carpeta.mkdir(parents=True)

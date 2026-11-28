@@ -415,13 +415,30 @@ def main():
     command = tool_input.get("command") or ""
     cwd = data.get("cwd") or os.getcwd()
     github = github_text_check(command, cwd, deadline)
-    if github:
+    if github and github[0] == "deny":
         emit(*github)
         return
+    # Un «ask» sobre el texto de gh no exime de revisar lo que el mismo comando sube con git.
+    try:
+        git = git_check(command, cwd, deadline)
+    except Exception as error:
+        if not github:
+            raise
+        git = ("allow", "No se pudo revisar la parte de git ({0}).".format(type(error).__name__))
+    if git and git[0] == "deny":
+        emit(*git)
+    elif github:
+        emit(github[0], github[1] + (" " + git[1] if git else ""))
+    elif git:
+        emit(*git)
+
+
+def git_check(command, cwd, deadline):
+    """Diff de git commit/push: devuelve (decisión, motivo) o None."""
     commit = bool(re.search(r"\bgit\s+commit\b", command))
     push = bool(re.search(r"\bgit\s+push\b", command))
     if not commit and not push:
-        return
+        return None
     root = repository_root(cwd, deadline)
     allowed_paths = load_allowed_paths(root)
     findings = []
@@ -449,11 +466,12 @@ def main():
         findings.extend(extra)
     findings = unique_findings(findings)
     if findings:
-        emit("deny", decision_reason(findings, warnings))
-    elif warnings:
-        emit("allow", "Anti-filtraciones: revisión propia sin hallazgos, pero {0}; se permite la operación.".format(
+        return "deny", decision_reason(findings, warnings)
+    if warnings:
+        return "allow", "Anti-filtraciones: revisión propia sin hallazgos, pero {0}; se permite la operación.".format(
             "; ".join(sorted(set(warnings))),
-        ))
+        )
+    return None
 
 
 if __name__ == "__main__":
